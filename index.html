@@ -174,7 +174,26 @@
           <div class="subnav-item" data-page="alertconfig">Alerts Settings</div>
         </div>
 
-        <div class="nav-item" data-page="workspaces"><div class="nav-item-main"><i class="ti ti-layout-grid"></i> Workspaces</div></div>
+        <div class="nav-item" data-toggle="workspaces"><div class="nav-item-main"><i class="ti ti-layout-grid"></i> Workspaces</div><i class="ti ti-chevron-down chev"></i></div>
+        <div class="submenu" id="sub-workspaces">
+          <div class="subnav-item" data-page="workspaces">Workspaces</div>
+          <div class="subnav-item" data-page="sesiones">Sesiones</div>
+          <div class="subnav-item" data-page="gruposworkspaces">Grupos de workspaces</div>
+          <div class="subnav-item" data-page="ubicaciones">Ubicaciones</div>
+          <div class="subnav-item" data-page="redes">Redes</div>
+          <div class="subnav-item" data-page="notificaciones">Notificaciones</div>
+          <div class="subnav-item" data-page="redesinalambricas">Redes inalámbricas</div>
+        </div>
+
+        <div class="nav-item" data-toggle="actualizaciones"><div class="nav-item-main"><i class="ti ti-clipboard-list"></i> Actualizaciones</div><i class="ti ti-chevron-down chev"></i></div>
+        <div class="submenu" id="sub-actualizaciones">
+          <div class="subnav-item" data-page="actresumen">Resumen</div>
+          <div class="subnav-item" data-page="actgrupos">Grupos de reporte</div>
+          <div class="subnav-item" data-page="actpatches">Microsoft Patches</div>
+          <div class="subnav-item" data-page="actdirectivas">Directivas de actualizaciones</div>
+          <div class="subnav-item" data-page="actdestinatarios">Destinatarios</div>
+        </div>
+
         <div class="nav-item" data-page="microservicios"><div class="nav-item-main"><i class="ti ti-cpu"></i> Microservicios</div></div>
         <div class="nav-item" data-page="config"><div class="nav-item-main"><i class="ti ti-settings"></i> Configuración</div></div>
       </nav>
@@ -183,7 +202,6 @@
     <div class="main">
       <div class="topbar">
         <div class="tenant-badge"><div class="tenant-dot"></div><span>Flexxible Training</span></div>
-        <div class="timer-pill" id="timer-pill"><i class="ti ti-clock"></i><span id="timer-display">05:00</span></div>
         <div style="font-size:12px;color:#ccc;" id="student-name-label">Alumno</div>
         <div class="user-badge" id="student-initials">--</div>
       </div>
@@ -191,21 +209,12 @@
     </div>
   </div>
 
-  <div class="overlay" id="timeup-overlay">
-    <div class="modal">
-      <div class="modal-icon" style="color:#c0392b;"><i class="ti ti-clock-x"></i></div>
-      <div class="modal-title">Tiempo agotado</div>
-      <div class="modal-sub">Vuelve a Evolcampus para introducir tu respuesta a esta pregunta.</div>
-    </div>
-  </div>
-
 </div>
 
 <script>
-var EXAM_SECONDS = 3 * 60;
 var TARGET_OP_ID = 2;
 
-var state = { finished:false, secsLeft: EXAM_SECONDS, timerInterval:null, currentPage:'inicio' };
+var state = { finished:false, currentPage:'inicio' };
 
 var ENUNCIADO = "";
 
@@ -230,25 +239,6 @@ var eventData = [
 ];
 
 function fmt(s){ return String(Math.floor(s/60)).padStart(2,'0') + ':' + String(s%60).padStart(2,'0'); }
-
-function startTimer(){
-  updateTimerUI();
-  state.timerInterval = setInterval(function(){
-    state.secsLeft--;
-    updateTimerUI();
-    if (state.secsLeft <= 0){
-      clearInterval(state.timerInterval);
-      if (!state.finished) lockInterface();
-    }
-  }, 1000);
-}
-function updateTimerUI(){
-  document.getElementById('timer-display').textContent = fmt(state.secsLeft);
-  var pill = document.getElementById('timer-pill');
-  pill.className = 'timer-pill';
-  if (state.secsLeft <= 60) pill.classList.add('danger');
-  else if (state.secsLeft <= 120) pill.classList.add('warn');
-}
 
 function enunciadoHtml(){
   if (!ENUNCIADO) return '';
@@ -286,6 +276,28 @@ function goPage(page){
     if (alertsSearch) alertsSearch.addEventListener('input', function(){ renderAlertas(alertsSearch.value); });
   }
   else if (page === 'alertconfig') area.innerHTML = pageAlertConfig();
+  else if (page === 'workspaces'){
+    area.innerHTML = pageWorkspaces();
+    renderWorkspaces();
+    var wsSearch = document.getElementById('ws-search');
+    if (wsSearch) wsSearch.addEventListener('input', function(){ renderWorkspaces(wsSearch.value); });
+  }
+  else if (page === 'sesiones') area.innerHTML = pageSesiones();
+  else if (page === 'gruposworkspaces') area.innerHTML = pageGruposWorkspaces();
+  else if (page === 'ubicaciones') area.innerHTML = pageUbicaciones();
+  else if (page === 'redes') area.innerHTML = pageRedes();
+  else if (page === 'notificaciones') area.innerHTML = pageNotificaciones();
+  else if (page === 'redesinalambricas'){
+    area.innerHTML = pageRedesInalambricas();
+    renderRedesInalambricas();
+    var wifiSearch = document.getElementById('wifi-search');
+    if (wifiSearch) wifiSearch.addEventListener('input', function(){ renderRedesInalambricas(wifiSearch.value); });
+  }
+  else if (page === 'actresumen') area.innerHTML = pageActResumen();
+  else if (page === 'actgrupos') area.innerHTML = pageActGrupos();
+  else if (page === 'actpatches') area.innerHTML = pageActPatches();
+  else if (page === 'actdirectivas') area.innerHTML = pageActDirectivas();
+  else if (page === 'actdestinatarios') area.innerHTML = pageActDestinatarios();
   else area.innerHTML = pageGeneric();
 }
 
@@ -383,17 +395,6 @@ function toggleEvent(i){
   var isOpen = out.classList.contains('open');
   out.classList.toggle('open');
   icon.innerHTML = isOpen ? '<i class="ti ti-chevron-right"></i>' : '<i class="ti ti-chevron-down"></i>';
-}
-
-/* =========================================================================
-   BLOQUEO AL AGOTAR EL TIEMPO
-   Este sandbox ya no gestiona respuestas ni notas (eso vive en Evolcampus,
-   en una pregunta independiente). Al agotar el tiempo, simplemente se
-   bloquea la interfaz para que el alumno vuelva a Evolcampus a responder.
-   ========================================================================= */
-function lockInterface(){
-  state.finished = true;
-  document.getElementById('timeup-overlay').classList.add('open');
 }
 
 function pageFlujos(){
@@ -498,6 +499,190 @@ function pageAlertConfig(){
   '<div class="table-wrap"><table><thead><tr><th>Nombre</th><th>Gravedad</th><th>Categoría</th><th>Umbral</th><th>Unidad</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div></div>';
 }
 
+/* ===================== WORKSPACES ===================== */
+var wsRows = [
+  {nombre:"11LAP1JY0V74.indra.es",estado:"Desconectado",ip:"10.22.192.9",grupo:"Oficina Indra",tipo:"Físico",conex:"Ethernet",ultimo:"21/8/26, 14:59:01"},
+  {nombre:"5CD54685XF",estado:"Desconectado",ip:"192.168.1.151",grupo:"RP Training",tipo:"Físico",conex:"Wifi",ultimo:"13/8/26, 23:44:58"},
+  {nombre:"AEC-5HDHJR3",estado:"Desconectado",ip:"172.20.156.93",grupo:"RP Training",tipo:"Físico",conex:"Wifi",ultimo:"14/8/26, 0:27:00"},
+  {nombre:"DESKTOP-DEFE7N5",estado:"Desconectado",ip:"192.168.1.131",grupo:"RP Training",tipo:"Virtual",conex:"Ethernet",ultimo:"1/9/26, 11:49:01"},
+  {nombre:"LAPTOP-B1TODCH9",estado:"Desconectado",ip:"-",grupo:"RP Training",tipo:"Físico",conex:"-",ultimo:"20/8/26, 8:30:07"}
+];
+
+function pageWorkspaces(){
+  return '<div class="page"><div class="page-header">' + enunciadoHtml() + '<div style="font-size:18px;font-weight:600;color:#1a1a1a;margin-bottom:8px;">Flexxible Training Site - Workspaces</div></div>' +
+  '<div class="toolbar"><div class="btn-tool"><i class="ti ti-device-desktop"></i> Asistencia remota</div><div class="btn-tool"><i class="ti ti-trash"></i> Eliminar workspaces</div><div class="btn-tool"><i class="ti ti-file-export"></i> Exportar</div><div style="flex:1"></div><div class="search-box"><i class="ti ti-search"></i><input type="text" id="ws-search" placeholder="Buscar por término..."></div><div class="filter-chip">Aplicaciones: <b>Cualquiera</b></div><div class="filter-chip">Grupos de workspaces: <b>Cualquiera</b></div></div>' +
+  '<div class="table-wrap"><table><thead><tr><th>Nombre</th><th>Estado</th><th>Dirección IP</th><th>Grupo de reporte</th><th>Tipo de dispositivo</th><th>Conexión</th><th>Último informe</th></tr></thead><tbody id="ws-tbody"></tbody></table></div>' +
+  '<div style="padding:8px 18px;font-size:11px;color:#888;" id="ws-count"></div></div>';
+}
+
+function renderWorkspaces(filterText){
+  var tbody = document.getElementById('ws-tbody');
+  if (!tbody) return;
+  var q = (filterText || '').trim().toLowerCase();
+  var filtered = q === '' ? wsRows : wsRows.filter(function(r){
+    return r.nombre.toLowerCase().indexOf(q) !== -1 ||
+           r.ip.toLowerCase().indexOf(q) !== -1 ||
+           r.grupo.toLowerCase().indexOf(q) !== -1 ||
+           r.tipo.toLowerCase().indexOf(q) !== -1;
+  });
+  tbody.innerHTML = filtered.map(function(r){
+    return '<tr><td class="desc-link">' + r.nombre + '</td><td>' + r.estado + '</td><td>' + r.ip + '</td><td>' + r.grupo + '</td><td>' + r.tipo + '</td><td>' + r.conex + '</td><td>' + r.ultimo + '</td></tr>';
+  }).join('');
+  var countEl = document.getElementById('ws-count');
+  if (countEl) countEl.textContent = filtered.length + ' resultado' + (filtered.length === 1 ? '' : 's');
+}
+
+function pageSesiones(){
+  return '<div class="page"><div class="page-header">' + enunciadoHtml() + '<div style="font-size:18px;font-weight:600;color:#1a1a1a;margin-bottom:8px;">Sesiones</div></div>' +
+  '<div class="toolbar"><div class="btn-tool"><i class="ti ti-file-export"></i> Exportar</div><div style="flex:1"></div><div class="search-box"><i class="ti ti-search"></i><input placeholder="Buscar por término..."></div></div>' +
+  '<div class="table-wrap"><table><thead><tr><th>Usuario</th><th>Workspace</th><th>Inicio de sesión</th><th>Estado</th></tr></thead><tbody>' +
+  '<tr><td class="desc-link">jserra@flexxible.com</td><td>DESKTOP-DEFE7N5</td><td>1/9/26, 08:12:03</td><td class="status-ok">Activa</td></tr>' +
+  '<tr><td class="desc-link">Training</td><td>5CD54685XF</td><td>31/8/26, 17:40:22</td><td class="status-warn">Inactiva</td></tr>' +
+  '</tbody></table></div></div>';
+}
+
+function pageGruposWorkspaces(){
+  var rows = [
+    ["Dispositivos Encendidos","Dinámico","0"],
+    ["Dispositivos W11","Estático","1"],
+    ["Equipos sin actualizar más de 30 días","Dinámico","2"],
+    ["Filtro Test Dinamico","Estático","0"],
+    ["Grupo Simón","Estático","0"],
+    ["Grupo dinamico Prueba","Dinámico","0"],
+    ["Grupo estático","Estático","1"],
+    ["Grupo sin seguridad","Estático","4"],
+    ["Menos de 80%","Dinámico","5"],
+    ["Máquinas encendidas","Dinámico","0"],
+    ["Otra prueba de lio","Estático","0"]
+  ];
+  var rowsHtml = rows.map(function(r){ return '<tr><td class="desc-link">' + r[0] + '</td><td>' + r[1] + '</td><td>' + r[2] + '</td></tr>'; }).join('');
+  return '<div class="page"><div class="page-header">' + enunciadoHtml() + '<div style="font-size:18px;font-weight:600;color:#1a1a1a;margin-bottom:8px;">Flexxible Training Site - Grupos de Workspaces</div></div>' +
+  '<div class="toolbar"><div class="btn-tool"><i class="ti ti-plus"></i> Nuevo</div><div class="btn-tool"><i class="ti ti-file-export"></i> Exportar</div><div style="flex:1"></div><div class="search-box"><i class="ti ti-search"></i><input placeholder="Buscar por término..."></div></div>' +
+  '<div class="table-wrap"><table><thead><tr><th>Nombre</th><th>Tipo</th><th># Workspaces</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div></div>';
+}
+
+function pageUbicaciones(){
+  return '<div class="page"><div class="page-header">' + enunciadoHtml() + '<div style="font-size:18px;font-weight:600;color:#1a1a1a;margin-bottom:8px;">Ubicaciones</div></div>' +
+  '<div class="toolbar"><div class="btn-tool"><i class="ti ti-plus"></i> Nuevo</div><div class="btn-tool"><i class="ti ti-file-export"></i> Exportar</div><div style="flex:1"></div><div class="search-box"><i class="ti ti-search"></i><input placeholder="Buscar por término..."></div></div>' +
+  '<div class="table-wrap"><table><thead><tr><th>Nombre</th><th>Dirección</th></tr></thead><tbody>' +
+  '<tr><td class="desc-link">Terrassa</td><td>Carrer de Vallhonrat, 45</td></tr>' +
+  '</tbody></table></div></div>';
+}
+
+function pageRedes(){
+  return '<div class="page"><div class="page-header">' + enunciadoHtml() + '<div style="font-size:18px;font-weight:600;color:#1a1a1a;margin-bottom:8px;">Redes</div></div>' +
+  '<div class="toolbar"><div class="btn-tool"><i class="ti ti-file-export"></i> Exportar</div><div style="flex:1"></div><div class="search-box"><i class="ti ti-search"></i><input placeholder="Buscar por término..."></div></div>' +
+  '<div class="table-wrap"><table><thead><tr><th>Red</th><th>Tipo</th><th>Workspaces conectados</th></tr></thead><tbody>' +
+  '<tr><td class="desc-link">RP Training - LAN</td><td>Ethernet</td><td>3</td></tr>' +
+  '<tr><td class="desc-link">Oficina Indra - LAN</td><td>Ethernet</td><td>1</td></tr>' +
+  '</tbody></table></div></div>';
+}
+
+function pageNotificaciones(){
+  return '<div class="page"><div class="page-header">' + enunciadoHtml() + '<div style="font-size:18px;font-weight:600;color:#1a1a1a;margin-bottom:8px;">Notificaciones</div></div>' +
+  '<div class="toolbar"><div class="btn-tool"><i class="ti ti-plus"></i> Nuevo</div><div class="btn-tool"><i class="ti ti-file-export"></i> Exportar</div><div style="flex:1"></div><div class="search-box"><i class="ti ti-search"></i><input placeholder="Buscar por término..."></div></div>' +
+  '<div class="table-wrap"><table><thead><tr><th>Nombre</th><th>Destinatarios</th><th>Estado</th></tr></thead><tbody>' +
+  '<tr><td class="desc-link">Baja de batería crítica</td><td>Equipos</td><td class="status-ok">Habilitado</td></tr>' +
+  '</tbody></table></div></div>';
+}
+
+var wifiRows = [
+  {ssid:"CHAKONEN",isp:"XFERA Moviles S.A",pob:"Villovieco",pais:"ES",ws:"DESKTOP-HB4T4RK"},
+  {ssid:"AP_4LT4M1R4N0",isp:"America Movil Peru S.A.C",pob:"Lima",pais:"PE",ws:"LALTAMIRANO10.indra.es"},
+  {ssid:"AYESA",isp:"",pob:"Madrid",pais:"ES",ws:"—"},
+  {ssid:"Ayesa_PDA",isp:"",pob:"Madrid",pais:"ES",ws:"DESKTOP-F32NGIC"},
+  {ssid:"CASAREAL",isp:"Telefonica De Espana S.A.U.",pob:"Madrid",pais:"ES",ws:"PRUEBAS-EREAL"},
+  {ssid:"Chakonen",isp:"Xtra Telecom S.A.",pob:"Carcastillo",pais:"ES",ws:"DESKTOP-HB4T4RK"},
+  {ssid:"CSC-Administracion_5G",isp:"Xtra Telecom S.A.",pob:"La Pobla de Farnals",pais:"ES",ws:"DESKTOP-HB4T4RK"},
+  {ssid:"D76E",isp:"",pob:"Madrid",pais:"ES",ws:"11LAP1JY0V74.indra.es"},
+  {ssid:"Deusto Seidor - Invitados",isp:"SAREnet, S.A",pob:"Madrid",pais:"ES",ws:"—"},
+  {ssid:"DIGIFIBRA-C6B7",isp:"Digi Spain Telecom S.L.U.",pob:"Usera",pais:"ES",ws:"11LAP5CG9324KWY.indra..."},
+  {ssid:"DIGIFIBRA-PLUS-2kAR",isp:"",pob:"Seville",pais:"ES",ws:"DESKTOP-IFE1SD5"},
+  {ssid:"DIGIFIBRA-PLUS-dCcH",isp:"Digi Spain Telecom S.L.U.",pob:"Vitoria-Gasteiz",pais:"ES",ws:"Ei003811"}
+];
+
+function pageRedesInalambricas(){
+  return '<div class="page"><div class="page-header">' + enunciadoHtml() + '<div style="font-size:18px;font-weight:600;color:#1a1a1a;margin-bottom:8px;">Redes inalámbricas</div></div>' +
+  '<div class="toolbar"><div class="btn-tool"><i class="ti ti-file-export"></i> Exportar</div><div style="flex:1"></div><div class="search-box"><i class="ti ti-search"></i><input type="text" id="wifi-search" placeholder="Buscar por término..."></div></div>' +
+  '<div class="table-wrap"><table><thead><tr><th>SSID</th><th>ISP</th><th>Población</th><th>País</th><th>Workspace detectado</th></tr></thead><tbody id="wifi-tbody"></tbody></table></div>' +
+  '<div style="padding:8px 18px;font-size:11px;color:#888;" id="wifi-count"></div></div>';
+}
+
+function renderRedesInalambricas(filterText){
+  var tbody = document.getElementById('wifi-tbody');
+  if (!tbody) return;
+  var q = (filterText || '').trim().toLowerCase();
+  var filtered = q === '' ? wifiRows : wifiRows.filter(function(r){
+    return r.ssid.toLowerCase().indexOf(q) !== -1 ||
+           r.isp.toLowerCase().indexOf(q) !== -1 ||
+           r.pob.toLowerCase().indexOf(q) !== -1 ||
+           r.ws.toLowerCase().indexOf(q) !== -1;
+  });
+  tbody.innerHTML = filtered.map(function(r){
+    return '<tr><td class="desc-link">' + r.ssid + '</td><td>' + r.isp + '</td><td>' + r.pob + '</td><td>' + r.pais + '</td><td>' + r.ws + '</td></tr>';
+  }).join('');
+  var countEl = document.getElementById('wifi-count');
+  if (countEl) countEl.textContent = filtered.length + ' resultado' + (filtered.length === 1 ? '' : 's');
+}
+
+/* ===================== ACTUALIZACIONES ===================== */
+function pageActResumen(){
+  return '<div class="page"><div class="page-header">' + enunciadoHtml() + '<div style="font-size:18px;font-weight:600;color:#1a1a1a;margin-bottom:8px;">Resumen</div></div>' +
+  '<div style="padding:0 20px;display:grid;grid-template-columns:1fr 1fr;gap:24px;">' +
+    '<div><div style="font-weight:600;margin-bottom:10px;">Targets</div>' +
+      '<div class="report-card" style="text-align:left;margin-bottom:10px;"><b style="color:#c87d30;">⚠ Alertas (1)</b><div style="font-size:13px;margin-top:6px;">Grupos de reporte sin una directiva de actualizaciones asignada</div></div>' +
+      '<div class="report-card" style="text-align:left;margin-bottom:10px;"><b style="color:#2563eb;">ℹ Información (1)</b><div style="font-size:13px;margin-top:6px;">¡Excelente trabajo! Todos los objetivos tienen horarios asignados</div></div>' +
+      '<div style="display:flex;gap:16px;"><div class="report-card"><div style="font-size:28px;font-weight:700;">38%</div><div style="font-size:11px;color:#888;">3 grupos de reporte</div><div style="font-size:12px;">Grupos de reporte sin una directiva de actualización</div></div>' +
+      '<div class="report-card"><div style="font-size:28px;font-weight:700;">0%</div><div style="font-size:11px;color:#888;">0 objetivos</div><div style="font-size:12px;">Objetivos sin una programación</div></div></div>' +
+    '</div>' +
+    '<div><div style="font-weight:600;margin-bottom:10px;">Workspaces</div>' +
+      '<div class="report-card" style="text-align:left;margin-bottom:10px;"><b style="color:#2563eb;">ℹ Información (1)</b><div style="font-size:13px;margin-top:6px;">¡Excelente trabajo! Todos los Workspaces tienen asignado un grupo de reporte</div></div>' +
+      '<div class="report-card"><div style="font-size:28px;font-weight:700;">0</div><div style="font-size:11px;color:#888;">5 workspaces en total</div><div style="font-size:12px;">Workspaces sin Grupo de Reporte</div></div>' +
+    '</div>' +
+  '</div></div>';
+}
+
+function pageActGrupos(){
+  return '<div class="page"><div class="page-header">' + enunciadoHtml() + '<div style="font-size:18px;font-weight:600;color:#1a1a1a;margin-bottom:8px;">Gestión de actualizaciones: grupos de reporte</div></div>' +
+  '<div style="padding:0 20px;display:flex;gap:16px;margin-bottom:16px;">' +
+    '<div class="report-card"><div style="font-size:24px;font-weight:700;">5</div><div style="font-size:11px;color:#888;">Total workspaces</div></div>' +
+    '<div class="report-card"><div style="font-size:24px;font-weight:700;">5</div><div style="font-size:11px;color:#888;">Windows workspaces</div></div>' +
+    '<div class="report-card"><div style="font-size:24px;font-weight:700;">0</div><div style="font-size:11px;color:#888;">Linux workspaces</div></div>' +
+  '</div>' +
+  '<div style="padding:0 20px;font-size:13px;">Total workspaces por grupo de reporte: <b>RP Training</b>, RP Training 2, Aeronáutica, XRTraining, UPCT – Departamento TIC, Prueba Rol específico, Oficina Indra, Prueba Laboratorio VM</div></div>';
+}
+
+var patchRows = [
+  ["2267602","Security Intelligence Update for Microsoft Defender Antivirus - KB2267602 (Version 1.457.441.0)","Definition Update","Microsoft Defender Antivirus","2/9/26"],
+  ["-","Microsoft Edge-Extended Stable Channel Version 152 Update for x86 based Editions","Updates","Microsoft Edge","2/9/26"],
+  ["-","Intel Corporation ComputeAccelerator Driver Update (32.0.100.4841)","Drivers","Windows 11 Client","2/9/26"],
+  ["-","Dell, Inc. Firmware Driver Update (0.1.35.0)","Drivers","Windows 11 Client","2/9/26"],
+  ["-","Microsoft Edge-WebView2 Runtime Version 152 Update for x64 based Editions","Updates","Microsoft Edge","2/9/26"]
+];
+function pageActPatches(){
+  var rowsHtml = patchRows.map(function(r){ return '<tr><td>' + r[0] + '</td><td class="desc-link">' + r[1] + '</td><td>' + r[2] + '</td><td>' + r[3] + '</td><td>' + r[4] + '</td></tr>'; }).join('');
+  return '<div class="page"><div class="page-header">' + enunciadoHtml() + '<div style="font-size:18px;font-weight:600;color:#1a1a1a;margin-bottom:8px;">Parches de Microsoft</div></div>' +
+  '<div class="toolbar"><div style="flex:1"></div><div class="search-box"><i class="ti ti-search"></i><input placeholder="Buscar por término..."></div></div>' +
+  '<div class="table-wrap"><table><thead><tr><th>KB</th><th>Descripción de revisión</th><th>Clasificación</th><th>Producto</th><th>Fecha de lanzamiento</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div></div>';
+}
+
+function pageActDirectivas(){
+  return '<div class="page"><div class="page-header">' + enunciadoHtml() + '<div style="font-size:18px;font-weight:600;color:#1a1a1a;margin-bottom:8px;">Directivas de actualizaciones de Microsoft</div></div>' +
+  '<div class="toolbar"><div style="flex:1"></div><div class="search-box"><i class="ti ti-search"></i><input placeholder="Buscar directiva de actualizaciones de Windows..."></div></div>' +
+  '<div class="table-wrap"><table><thead><tr><th>Nombre</th><th>Objetivos de la directiva</th><th>Aprobaciones automáticas</th></tr></thead><tbody>' +
+  '<tr><td class="desc-link">Directiva de parches</td><td class="desc-link">Prueba para directiva de actualización</td><td class="status-ok">● Habilitado</td></tr>' +
+  '</tbody></table></div></div>';
+}
+
+function pageActDestinatarios(){
+  return '<div class="page"><div class="page-header">' + enunciadoHtml() + '<div style="font-size:18px;font-weight:600;color:#1a1a1a;margin-bottom:8px;">Destinatarios</div></div>' +
+  '<div class="toolbar"><div class="btn-tool"><i class="ti ti-plus"></i> Nuevo</div><div class="btn-tool"><i class="ti ti-file-export"></i> Exportar</div><div style="flex:1"></div><div class="search-box"><i class="ti ti-search"></i><input placeholder="Buscar por término..."></div></div>' +
+  '<div class="table-wrap"><table><thead><tr><th>Nombre</th><th>Grupos de reporte</th><th>Tiene programación establecida</th></tr></thead><tbody>' +
+  '<tr><td class="desc-link">Prueba para directiva de actualización</td><td>RP Training 2</td><td>✓</td></tr>' +
+  '<tr><td class="desc-link">Equipos</td><td>RT, OI, PV</td><td>✓</td></tr>' +
+  '</tbody></table></div></div>';
+}
+
 function pageGeneric(){
   return '<div class="page"><div class="page-header">' + enunciadoHtml() + '<div style="font-size:18px;font-weight:600;color:#1a1a1a;">Sección en construcción</div></div></div>';
 }
@@ -514,7 +699,6 @@ document.getElementById('sidebar-nav').addEventListener('click', function(e){
 });
 
 goPage('inicio');
-startTimer();
 </script>
 </body>
 </html>
