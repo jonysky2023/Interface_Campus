@@ -116,6 +116,52 @@
   .modal-title { font-size: 18px; font-weight: 600; color: #1a1a1a; margin-bottom: 8px; }
   .modal-sub { font-size: 13px; color: #666; line-height: 1.5; }
 
+  /* Detalle de Grupo de Workspaces */
+  .gws-tabs { display: flex; gap: 4px; border-bottom: 0.5px solid #e0dfd8; margin-top: 10px; }
+  .gws-tab { padding: 8px 14px; font-size: 13px; color: #666; cursor: pointer; border-bottom: 2px solid transparent; }
+  .gws-tab:hover { color: #222; }
+  .gws-tab.active { color: #1a1a1a; font-weight: 600; border-bottom-color: #f5813e; }
+  .gws-panel { padding: 16px 0; }
+  .gws-card { background: #fff; border: 0.5px solid #e0dfd8; border-radius: 8px; padding: 20px; }
+  .gws-field-label { font-size: 11px; color: #999; margin-bottom: 2px; }
+  .gws-field-value { font-size: 14px; color: #222; margin-bottom: 16px; }
+  .gws-side-box { background: #fff; border: 0.5px solid #e0dfd8; border-radius: 8px; padding: 14px 16px; display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .gws-side-box i { font-size: 20px; color: #f5813e; }
+  .gws-side-label { font-size: 11px; color: #999; }
+  .gws-side-value { font-size: 14px; font-weight: 600; color: #222; }
+  .gws-empty { text-align: center; padding: 60px 20px; color: #888; }
+  .gws-empty i { font-size: 40px; color: #ccc; margin-bottom: 10px; display: block; }
+
+  .bar-chart-wrap { display: flex; align-items: flex-end; gap: 6px; height: 180px; padding: 10px 0; border-bottom: 1px solid #ddd; }
+  .bar-chart-bar { background: #f5813e; width: 100%; border-radius: 2px 2px 0 0; }
+  .bar-chart-labels { display: flex; gap: 6px; margin-top: 6px; }
+  .bar-chart-labels span { width: 100%; font-size: 10px; color: #888; text-align: center; white-space: nowrap; }
+
+  /* Panel lateral de "Nueva acción programada" */
+  .side-panel-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 200; justify-content: flex-end; }
+  .side-panel-overlay.open { display: flex; }
+  .side-panel { background: #fff; width: 420px; max-width: 92vw; height: 100%; overflow-y: auto; padding: 20px 24px; box-shadow: -4px 0 16px rgba(0,0,0,.15); }
+  .side-panel-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 0.5px solid #e0dfd8; padding-bottom: 12px; margin-bottom: 16px; }
+  .side-panel-title { font-size: 17px; font-weight: 600; color: #1a1a1a; }
+  .side-panel-close { background: none; border: none; font-size: 20px; color: #888; cursor: pointer; }
+  .sp-label { font-size: 13px; font-weight: 500; color: #333; margin: 16px 0 6px; }
+  .sp-label .req { color: #c0392b; }
+  .sp-select, .sp-input { width: 100%; border: 0.5px solid #ccc; border-radius: 6px; padding: 8px 10px; font-size: 13px; color: #333; outline: none; }
+  .sp-select:focus, .sp-input:focus { border-color: #2563eb; }
+  .sp-input.err { border-color: #c0392b; }
+  .sp-err-msg { font-size: 11px; color: #c0392b; margin-top: 4px; }
+  .sp-box { border: 0.5px solid #e0dfd8; border-radius: 8px; padding: 14px; margin-top: 6px; }
+  .sp-radio-row { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #333; margin-bottom: 10px; }
+  .sp-days-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 20px; padding-left: 22px; }
+  .sp-day-item { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #333; }
+  .sp-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; border-top: 0.5px solid #e0dfd8; padding-top: 16px; }
+  .sp-btn { border-radius: 6px; padding: 8px 18px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; }
+  .sp-btn-cancel { background: #fff; border: 0.5px solid #ccc; color: #555; }
+  .sp-btn-submit { background: #f5813e; color: #fff; }
+
+  #token-box { font-family: "SFMono-Regular", Consolas, monospace; font-size: 17px; font-weight: 700; letter-spacing: 1px; background: #f5f4f0; border: 1.5px dashed #f5813e; border-radius: 8px; padding: 12px 16px; margin-top: 10px; color: #1a1a1a; user-select: all; }
+  #copy-token-btn { margin-top: 10px; }
+
   .home-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; margin: 16px 0; }
   .home-card { background: #fff; border: 0.5px solid #e0dfd8; border-radius: 10px; padding: 24px; text-align: center; cursor: pointer; }
   .home-card:hover { border-color: #ccc; }
@@ -209,9 +255,79 @@
     </div>
   </div>
 
+  <div class="side-panel-overlay" id="sp-overlay">
+    <div class="side-panel">
+      <div class="side-panel-header">
+        <div class="side-panel-title">Nueva acción programada</div>
+        <button class="side-panel-close" id="sp-close">×</button>
+      </div>
+
+      <div class="sp-label">Acción <span class="req">*</span></div>
+      <select class="sp-select" id="sp-accion">
+        <option value="">Seleccionar una acción</option>
+        <option value="wol">Wake On LAN</option>
+        <option value="apagar">Apagar</option>
+        <option value="reiniciar">Reiniciar</option>
+      </select>
+
+      <div class="sp-label">Programación <span class="req">*</span></div>
+      <div class="sp-box">
+        <div style="font-size:12px;color:#555;margin-bottom:8px;">Hora de inicio:</div>
+        <input class="sp-input" type="time" id="sp-hora">
+        <div class="sp-err-msg" id="sp-hora-err" style="display:none;">El tiempo es obligatorio</div>
+
+        <div style="border-top:0.5px solid #eee;margin:14px 0;"></div>
+        <div style="font-size:12px;color:#555;margin-bottom:8px;">Patrón de recurrencia</div>
+        <div class="sp-radio-row"><input type="radio" checked disabled> Semanal</div>
+        <div class="sp-days-grid">
+          <label class="sp-day-item"><input type="checkbox" value="Lunes"> Lunes</label>
+          <label class="sp-day-item"><input type="checkbox" value="Martes"> Martes</label>
+          <label class="sp-day-item"><input type="checkbox" value="Miércoles"> Miércoles</label>
+          <label class="sp-day-item"><input type="checkbox" value="Jueves"> Jueves</label>
+          <label class="sp-day-item"><input type="checkbox" value="Viernes"> Viernes</label>
+          <label class="sp-day-item"><input type="checkbox" value="Sábado"> Sábado</label>
+          <label class="sp-day-item"><input type="checkbox" value="Domingo"> Domingo</label>
+        </div>
+      </div>
+      <div class="sp-err-msg" id="sp-dias-err" style="display:none;">Selecciona al menos un día</div>
+
+      <div class="sp-label">Zona horaria <span class="req">*</span></div>
+      <select class="sp-select" id="sp-zona">
+        <option value="">Seleccionar zona horaria</option>
+        <option value="madrid">(UTC+01:00) Madrid</option>
+        <option value="samoa">(UTC-11:00) Midway Island, Samoa</option>
+        <option value="hawaii">(UTC-10:00) Hawaii</option>
+        <option value="alaska">(UTC-09:00) Alaska</option>
+        <option value="pacific">(UTC-08:00 / UTC-07:00) Pacific Time (US &amp; Canada)</option>
+        <option value="tijuana">(UTC-08:00 / UTC-07:00) Tijuana, Baja California</option>
+        <option value="arizona">(UTC-07:00) Arizona</option>
+        <option value="mountain">(UTC-07:00 / UTC-06:00) Mountain Time (US &amp; Canada)</option>
+      </select>
+      <div class="sp-err-msg" id="sp-zona-err" style="display:none;">La zona horaria es obligatoria</div>
+
+      <div class="sp-footer">
+        <button class="sp-btn sp-btn-cancel" id="sp-cancel">Cancelar</button>
+        <button class="sp-btn sp-btn-submit" id="sp-submit">+ Nuevo</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="token-overlay">
+    <div class="modal">
+      <div class="modal-icon"><i class="ti ti-circle-check"></i></div>
+      <div class="modal-title" id="token-title">Programación creada</div>
+      <div class="modal-sub" id="token-sub"></div>
+      <div id="token-box" style="display:none;"></div>
+      <button class="sp-btn sp-btn-submit" id="copy-token-btn" style="display:none;">Copiar código</button>
+      <div style="margin-top:16px;"><button class="sp-btn sp-btn-cancel" id="token-close">Cerrar</button></div>
+    </div>
+  </div>
+
 </div>
 
 <script>
+var TOKEN_PROGRAMACION_APAGADO = "FLX-SCHED-APAGADO-OK";
+var grupoWSState = { activeTab: 'detalles', programaciones: [] };
 var TARGET_OP_ID = 2;
 
 var state = { finished:false, currentPage:'inicio' };
@@ -283,7 +399,12 @@ function goPage(page){
     if (wsSearch) wsSearch.addEventListener('input', function(){ renderWorkspaces(wsSearch.value); });
   }
   else if (page === 'sesiones') area.innerHTML = pageSesiones();
-  else if (page === 'gruposworkspaces') area.innerHTML = pageGruposWorkspaces();
+  else if (page === 'gruposworkspaces'){
+    area.innerHTML = pageGruposWorkspaces();
+    var gwsRow = document.querySelector('tr[data-gws]');
+    if (gwsRow) gwsRow.addEventListener('click', function(){ goPage('grupowsdetail'); });
+  }
+  else if (page === 'grupowsdetail'){ area.innerHTML = pageGrupoWSDetail(); wireGrupoWSTabs(); renderGrupoWSTab('detalles'); }
   else if (page === 'ubicaciones') area.innerHTML = pageUbicaciones();
   else if (page === 'redes') area.innerHTML = pageRedes();
   else if (page === 'notificaciones') area.innerHTML = pageNotificaciones();
@@ -555,7 +676,10 @@ function pageGruposWorkspaces(){
     ["Máquinas encendidas","Dinámico","0"],
     ["Otra prueba de lio","Estático","0"]
   ];
-  var rowsHtml = rows.map(function(r){ return '<tr><td class="desc-link">' + r[0] + '</td><td>' + r[1] + '</td><td>' + r[2] + '</td></tr>'; }).join('');
+  var rowsHtml = rows.map(function(r){
+    var clickable = r[0] === 'Grupo sin seguridad';
+    return '<tr' + (clickable ? ' class="clickable" data-gws="1"' : '') + '><td class="desc-link">' + r[0] + '</td><td>' + r[1] + '</td><td>' + r[2] + '</td></tr>';
+  }).join('');
   return '<div class="page"><div class="page-header">' + enunciadoHtml() + '<div style="font-size:18px;font-weight:600;color:#1a1a1a;margin-bottom:8px;">Flexxible Training Site - Grupos de Workspaces</div></div>' +
   '<div class="toolbar"><div class="btn-tool"><i class="ti ti-plus"></i> Nuevo</div><div class="btn-tool"><i class="ti ti-file-export"></i> Exportar</div><div style="flex:1"></div><div class="search-box"><i class="ti ti-search"></i><input placeholder="Buscar por término..."></div></div>' +
   '<div class="table-wrap"><table><thead><tr><th>Nombre</th><th>Tipo</th><th># Workspaces</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div></div>';
@@ -642,6 +766,47 @@ function pageActResumen(){
   '</div></div>';
 }
 
+function pieChartHtml(data, size){
+  var total = 0;
+  data.forEach(function(d){ total += d.value; });
+  var cx = size/2, cy = size/2, r = size/2 - 6;
+  var angle = -90;
+  var paths = '';
+  data.forEach(function(d){
+    if (total <= 0 || d.value <= 0) return;
+    var slice = (d.value/total)*360;
+    var a1 = angle * Math.PI/180;
+    var x1 = cx + r*Math.cos(a1), y1 = cy + r*Math.sin(a1);
+    var endAngle = angle + slice;
+    var a2 = endAngle * Math.PI/180;
+    var x2 = cx + r*Math.cos(a2), y2 = cy + r*Math.sin(a2);
+    var largeArc = slice > 180 ? 1 : 0;
+    paths += '<path d="M' + cx + ',' + cy + ' L' + x1.toFixed(2) + ',' + y1.toFixed(2) +
+      ' A' + r + ',' + r + ' 0 ' + largeArc + ' 1 ' + x2.toFixed(2) + ',' + y2.toFixed(2) +
+      ' Z" fill="' + d.color + '"></path>';
+    angle = endAngle;
+  });
+  var legend = data.map(function(d){
+    return '<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#333;margin-bottom:8px;">' +
+      '<span style="width:11px;height:11px;border-radius:50%;background:' + d.color + ';display:inline-block;flex-shrink:0;"></span>' +
+      '<b>' + d.label + '</b></div>';
+  }).join('');
+  return '<div style="display:flex;align-items:center;gap:36px;flex-wrap:wrap;">' +
+    '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '">' + paths + '</svg>' +
+    '<div>' + legend + '</div></div>';
+}
+
+var grupoReporteData = [
+  {label:"RP Training", value:4, color:"#8ab4f8"},
+  {label:"RP Training 2", value:0, color:"#3a3a3a"},
+  {label:"Aeronáutica", value:0, color:"#8ce99a"},
+  {label:"XRTraining", value:0, color:"#f5a623"},
+  {label:"UPCT – Departamento TIC", value:0, color:"#6c5ce7"},
+  {label:"Prueba Rol específico", value:0, color:"#e64980"},
+  {label:"Oficina Indra", value:1, color:"#e6d94d"},
+  {label:"Prueba Laboratorio VM", value:0, color:"#2f9e7a"}
+];
+
 function pageActGrupos(){
   return '<div class="page"><div class="page-header">' + enunciadoHtml() + '<div style="font-size:18px;font-weight:600;color:#1a1a1a;margin-bottom:8px;">Gestión de actualizaciones: grupos de reporte</div></div>' +
   '<div style="padding:0 20px;display:flex;gap:16px;margin-bottom:16px;">' +
@@ -649,7 +814,10 @@ function pageActGrupos(){
     '<div class="report-card"><div style="font-size:24px;font-weight:700;">5</div><div style="font-size:11px;color:#888;">Windows workspaces</div></div>' +
     '<div class="report-card"><div style="font-size:24px;font-weight:700;">0</div><div style="font-size:11px;color:#888;">Linux workspaces</div></div>' +
   '</div>' +
-  '<div style="padding:0 20px;font-size:13px;">Total workspaces por grupo de reporte: <b>RP Training</b>, RP Training 2, Aeronáutica, XRTraining, UPCT – Departamento TIC, Prueba Rol específico, Oficina Indra, Prueba Laboratorio VM</div></div>';
+  '<div style="padding:0 20px;">' +
+    '<div style="font-size:15px;font-weight:600;color:#333;margin-bottom:14px;">Total workspaces por grupo de reporte</div>' +
+    pieChartHtml(grupoReporteData, 200) +
+  '</div></div>';
 }
 
 var patchRows = [
@@ -682,6 +850,211 @@ function pageActDestinatarios(){
   '<tr><td class="desc-link">Equipos</td><td>RT, OI, PV</td><td>✓</td></tr>' +
   '</tbody></table></div></div>';
 }
+
+/* ===================== DETALLE GRUPO DE WORKSPACES (ejercicio de programación) ===================== */
+
+var gwsWorkspaces = [
+  {nombre:"11LAP1JY0V74.indra.es",fqdn:"11LAP1JY0V74.indra.es",ip:"10.22.192.9",so:"Microsoft Windows 11 Pro 25H2",cpu:"14",ram:"15828",tipo:"Physical device"},
+  {nombre:"5CD54685XF",fqdn:"5CD54685XF",ip:"192.168.1.151",so:"Microsoft Windows 11 Pro 25H2",cpu:"12",ram:"15645",tipo:"Physical device"},
+  {nombre:"DESKTOP-DEFE7N5",fqdn:"DESKTOP-DEFE7N5",ip:"192.168.1.131",so:"Microsoft Windows 10 Enterprise Evaluation",cpu:"4",ram:"2489",tipo:"Virtual Desktop"},
+  {nombre:"AEC-5HDHJR3",fqdn:"AEC-5HDHJR3",ip:"172.20.156.93",so:"Microsoft Windows 11 Pro 24H2",cpu:"8",ram:"15761",tipo:"Physical device"}
+];
+
+var gwsApps = [
+  ["7-Zip 23.01 (x64)","Igor Pavlov","23.01","Windows","1"],
+  ["7-Zip 26.02 (x64 edition)","Igor Pavlov","26.02.00.0","Windows","1"],
+  ["Adobe Acrobat (64-bit)","Adobe","26.001.21662","Windows","1"],
+  ["Aplicaciones de Microsoft 365 para empresas","Microsoft Corporation","16.0.20026.20168","Windows","1"],
+  ["Aplicaciones de Microsoft 365 para empresas","Microsoft Corporation","16.0.20228.20186","Windows","1"],
+  ["Blender","Blender Foundation","5.1.1","Windows","1"],
+  ["Calculator","Microsoft Corporation","11.2508.0","Windows","1"],
+  ["Calculator","Microsoft Corporation","11.2606.0","Windows","1"],
+  ["Calendar","Microsoft Corporation","2.2602.0","Windows","1"]
+];
+
+var gwsHistorial = ["ago 21st","ago 22nd","ago 23rd","ago 24th","ago 25th","ago 26th","ago 27th","ago 28th","ago 29th","ago 30th","ago 31st","sept 1st","sept 2nd","sept 3rd","sept 4th","sept 5th"];
+
+function barChartHtml(labels, values, maxVal){
+  var bars = values.map(function(v){
+    var h = maxVal > 0 ? (v/maxVal)*100 : 0;
+    return '<div class="bar-chart-bar" style="height:' + h + '%;" title="' + v + '"></div>';
+  }).join('');
+  var lbls = labels.map(function(l){ return '<span>' + l + '</span>'; }).join('');
+  return '<div class="bar-chart-wrap">' + bars + '</div><div class="bar-chart-labels">' + lbls + '</div>';
+}
+
+function pageGrupoWSDetail(){
+  return '<div class="page"><div class="page-header">' + enunciadoHtml() +
+    '<div class="breadcrumb"><a id="gws-back-1">Flexxible Training Site</a><i class="ti ti-chevron-right" style="font-size:11px;"></i><a id="gws-back-2">Grupos de Workspaces</a><i class="ti ti-chevron-right" style="font-size:11px;"></i><span style="color:#555;">Grupo sin seguridad</span></div>' +
+    '<div style="font-size:20px;font-weight:700;color:#1a1a1a;">Grupo sin seguridad</div>' +
+    '<div class="gws-tabs">' +
+      '<div class="gws-tab" data-tab="detalles">Detalles del grupo de Workspaces</div>' +
+      '<div class="gws-tab" data-tab="workspaces">Workspaces</div>' +
+      '<div class="gws-tab" data-tab="historial">Historial</div>' +
+      '<div class="gws-tab" data-tab="ubicacion">Ubicación</div>' +
+      '<div class="gws-tab" data-tab="aplicaciones">Aplicaciones instaladas</div>' +
+      '<div class="gws-tab" data-tab="programaciones">Programaciones</div>' +
+    '</div>' +
+  '</div>' +
+  '<div class="page" style="padding:0 20px;"><div class="gws-panel" id="gws-tab-content"></div></div></div>';
+}
+
+function wireGrupoWSTabs(){
+  document.getElementById('gws-back-1').addEventListener('click', function(){ goPage('inicio'); });
+  document.getElementById('gws-back-2').addEventListener('click', function(){ goPage('gruposworkspaces'); });
+  document.querySelectorAll('.gws-tab').forEach(function(t){
+    t.addEventListener('click', function(){ renderGrupoWSTab(t.dataset.tab); });
+  });
+}
+
+function renderGrupoWSTab(tab){
+  grupoWSState.activeTab = tab;
+  document.querySelectorAll('.gws-tab').forEach(function(t){ t.classList.toggle('active', t.dataset.tab === tab); });
+  var el = document.getElementById('gws-tab-content');
+  if (!el) return;
+
+  if (tab === 'detalles'){
+    el.innerHTML = '<div style="display:grid;grid-template-columns:2fr 1fr;gap:20px;">' +
+      '<div class="gws-card">' +
+        '<div class="gws-field-label">Nombre</div><div class="gws-field-value">Grupo sin seguridad</div>' +
+        '<div class="gws-field-label">Descripción</div><div class="gws-field-value">-</div>' +
+        '<div class="gws-field-label">Tipo</div><div class="gws-field-value">Estático</div>' +
+      '</div>' +
+      '<div>' +
+        '<div class="gws-side-box"><i class="ti ti-stack"></i><div><div class="gws-side-label"># Workspaces</div><div class="gws-side-value">4</div></div></div>' +
+        '<div class="gws-side-box"><i class="ti ti-users"></i><div><div class="gws-side-label">Creado por</div><div class="gws-side-value">Joan Serra</div></div></div>' +
+        '<div class="gws-side-box"><i class="ti ti-calendar"></i><div><div class="gws-side-label">Fecha de creación</div><div class="gws-side-value">21/8/26</div></div></div>' +
+      '</div></div>';
+  }
+  else if (tab === 'workspaces'){
+    var rows = gwsWorkspaces.map(function(w){
+      return '<tr><td class="desc-link">' + w.nombre + '</td><td>' + w.fqdn + '</td><td>' + w.ip + '</td><td>' + w.so + '</td><td>' + w.cpu + '</td><td>' + w.ram + '</td><td>' + w.tipo + '</td></tr>';
+    }).join('');
+    el.innerHTML = '<div class="toolbar" style="padding:0 0 10px;background:transparent;border:none;"><div class="btn-tool"><i class="ti ti-upload"></i> Importar Workspaces</div><div class="btn-tool"><i class="ti ti-pencil"></i> Editar</div><div class="btn-tool"><i class="ti ti-file-export"></i> Exportar</div></div>' +
+      '<div class="table-wrap"><table><thead><tr><th>Nombre</th><th>FQDN</th><th>Dirección IP</th><th>Sistema operativo</th><th>Núcleos de CPU</th><th>RAM</th><th>Tipo</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+  }
+  else if (tab === 'historial'){
+    var vals = [4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,0];
+    el.innerHTML = '<div style="font-size:14px;color:#888;margin-bottom:10px;">Workspaces por día</div>' + barChartHtml(gwsHistorial, vals, 5);
+  }
+  else if (tab === 'ubicacion'){
+    el.innerHTML = '<div style="display:grid;grid-template-columns:1fr 1.3fr;gap:20px;">' +
+      '<div>' +
+        '<div class="gws-field-label">Dirección</div><div class="gws-field-value">Carrer de Vallhonrat, 08221 Terrassa, Barcelona, España</div>' +
+        '<div class="gws-field-label">Descripción</div><div class="gws-field-value">-</div>' +
+        '<button class="sp-btn sp-btn-cancel">Editar</button>' +
+      '</div>' +
+      '<div style="background:#e8ecef;border-radius:8px;height:260px;display:flex;align-items:center;justify-content:center;color:#888;font-size:12px;"><i class="ti ti-map-pin" style="font-size:24px;margin-right:6px;color:#c0392b;"></i> Carrer de Vallhonrat (mapa)</div>' +
+    '</div>';
+  }
+  else if (tab === 'aplicaciones'){
+    var appRows = gwsApps.map(function(a){
+      return '<tr><td class="desc-link">' + a[0] + '</td><td>' + a[1] + '</td><td>' + a[2] + '</td><td>' + a[3] + '</td><td>' + a[4] + '</td></tr>';
+    }).join('');
+    el.innerHTML = '<div style="background:#f5f4f0;border:0.5px solid #e0dfd8;border-radius:6px;padding:8px 12px;font-size:12px;color:#666;margin-bottom:12px;"><i class="ti ti-info-circle"></i> Los datos se actualizan cada 2 horas. Es posible que los cambios recientes aún no se reflejen.</div>' +
+      '<div class="table-wrap"><table><thead><tr><th>Aplicación</th><th>Editor</th><th>Versión</th><th>Sistema operativo</th><th># Workspaces</th></tr></thead><tbody>' + appRows + '</tbody></table></div>' +
+      '<div style="padding:8px 0;font-size:11px;color:#888;">Mostrando 1 a 50 de 131 resultados</div>';
+  }
+  else if (tab === 'programaciones'){
+    renderProgramacionesTab(el);
+  }
+}
+
+function renderProgramacionesTab(el){
+  var toolbar = '<div class="toolbar" style="padding:0 0 10px;background:transparent;border:none;"><div class="btn-tool" id="gws-nuevo-prog"><i class="ti ti-plus"></i> Nuevo</div><div class="btn-tool"><i class="ti ti-file-export"></i> Exportar</div><div class="btn-tool"><i class="ti ti-refresh"></i> Recargar</div></div>';
+  var body;
+  if (grupoWSState.programaciones.length === 0){
+    body = '<div class="gws-empty"><i class="ti ti-package"></i>No hay programaciones configuradas</div>';
+  } else {
+    var rows = grupoWSState.programaciones.map(function(p){
+      return '<tr><td class="desc-link">' + p.accionLabel + '</td><td>' + p.resumen + '</td><td>' + p.zonaLabel + '</td></tr>';
+    }).join('');
+    body = '<div class="table-wrap"><table><thead><tr><th>Acción</th><th>Programación</th><th>Zona horaria</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+  }
+  el.innerHTML = toolbar + body;
+  var btn = document.getElementById('gws-nuevo-prog');
+  if (btn) btn.addEventListener('click', openSidePanel);
+}
+
+/* ---- Panel lateral "Nueva acción programada" ---- */
+function openSidePanel(){
+  document.getElementById('sp-accion').value = '';
+  document.getElementById('sp-hora').value = '';
+  document.getElementById('sp-zona').value = '';
+  document.querySelectorAll('.sp-day-item input').forEach(function(cb){ cb.checked = false; });
+  document.getElementById('sp-hora-err').style.display = 'none';
+  document.getElementById('sp-dias-err').style.display = 'none';
+  document.getElementById('sp-zona-err').style.display = 'none';
+  document.getElementById('sp-hora').classList.remove('err');
+  document.getElementById('sp-overlay').classList.add('open');
+}
+function closeSidePanel(){
+  document.getElementById('sp-overlay').classList.remove('open');
+}
+
+function submitProgramacion(){
+  var accionSel = document.getElementById('sp-accion');
+  var hora = document.getElementById('sp-hora').value;
+  var zonaSel = document.getElementById('sp-zona');
+  var diasChecked = Array.prototype.slice.call(document.querySelectorAll('.sp-day-item input:checked')).map(function(cb){ return cb.value; });
+
+  var horaErr = document.getElementById('sp-hora-err');
+  var diasErr = document.getElementById('sp-dias-err');
+  var zonaErr = document.getElementById('sp-zona-err');
+  var horaInput = document.getElementById('sp-hora');
+
+  var valid = true;
+  if (!hora){ horaErr.style.display = 'block'; horaInput.classList.add('err'); valid = false; }
+  else { horaErr.style.display = 'none'; horaInput.classList.remove('err'); }
+
+  if (diasChecked.length === 0){ diasErr.style.display = 'block'; valid = false; }
+  else { diasErr.style.display = 'none'; }
+
+  if (!zonaSel.value){ zonaErr.style.display = 'block'; valid = false; }
+  else { zonaErr.style.display = 'none'; }
+
+  if (!accionSel.value) valid = false;
+
+  if (!valid) return;
+
+  var accionLabel = accionSel.options[accionSel.selectedIndex].text;
+  var zonaLabel = zonaSel.options[zonaSel.selectedIndex].text;
+  var diasTexto = diasChecked.length === 1 ? ('sólo el ' + diasChecked[0].toLowerCase())
+    : ('sólo ' + diasChecked.slice(0,-1).map(function(d){return d.toLowerCase();}).join(', ') + ' y ' + diasChecked[diasChecked.length-1].toLowerCase());
+  var resumen = 'A las ' + hora + ', ' + diasTexto;
+
+  grupoWSState.programaciones.push({ accionLabel: accionLabel, resumen: resumen, zonaLabel: zonaLabel, accionValue: accionSel.value });
+
+  closeSidePanel();
+  renderGrupoWSTab('programaciones');
+
+  if (accionSel.value === 'apagar'){
+    document.getElementById('token-title').textContent = '¡Programación de apagado creada correctamente!';
+    document.getElementById('token-sub').textContent = 'Copia este código y pégalo en la pregunta correspondiente de Evolcampus:';
+    document.getElementById('token-box').textContent = TOKEN_PROGRAMACION_APAGADO;
+    document.getElementById('token-box').style.display = 'block';
+    document.getElementById('copy-token-btn').style.display = 'inline-block';
+  } else {
+    document.getElementById('token-title').textContent = 'Programación creada';
+    document.getElementById('token-sub').textContent = 'Se ha guardado la acción programada correctamente.';
+    document.getElementById('token-box').style.display = 'none';
+    document.getElementById('copy-token-btn').style.display = 'none';
+  }
+  document.getElementById('token-overlay').classList.add('open');
+}
+
+document.getElementById('sp-close').addEventListener('click', closeSidePanel);
+document.getElementById('sp-cancel').addEventListener('click', closeSidePanel);
+document.getElementById('sp-submit').addEventListener('click', submitProgramacion);
+document.getElementById('token-close').addEventListener('click', function(){ document.getElementById('token-overlay').classList.remove('open'); });
+document.getElementById('copy-token-btn').addEventListener('click', function(){
+  var txt = document.getElementById('token-box').textContent;
+  navigator.clipboard.writeText(txt).then(function(){
+    var btn = document.getElementById('copy-token-btn');
+    btn.textContent = 'Copiado ✓';
+    setTimeout(function(){ btn.textContent = 'Copiar código'; }, 1500);
+  }).catch(function(){});
+});
 
 function pageGeneric(){
   return '<div class="page"><div class="page-header">' + enunciadoHtml() + '<div style="font-size:18px;font-weight:600;color:#1a1a1a;">Sección en construcción</div></div></div>';
