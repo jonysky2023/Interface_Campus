@@ -68,7 +68,7 @@
   .desc-link { color: #2563eb; text-decoration: none; }
 
   .detail-layout { flex: 1; display: flex; overflow: hidden; }
-  .detail-sidebar { width: 170px; background: #fff; border-right: 0.5px solid #e0dfd8; padding: 12px 0; flex-shrink: 0; }
+  .detail-sidebar { width: 170px; background: #fff; border-right: 0.5px solid #e0dfd8; padding: 12px 0; flex-shrink: 0; overflow-y: auto; }
   .detail-section-title { font-size: 11px; color: #999; padding: 4px 16px 6px; text-transform: uppercase; letter-spacing: .05em; }
   .detail-nav-item { padding: 7px 16px; cursor: pointer; font-size: 12px; color: #555; display: flex; align-items: center; justify-content: space-between; border-left: 2px solid transparent; }
   .detail-nav-item:hover { background: #f5f4f0; color: #222; }
@@ -167,6 +167,17 @@
   .global-token-value { font-family: "SFMono-Regular", Consolas, monospace; font-size: 14px; font-weight: 700; color: #f5813e; letter-spacing: 1.5px; user-select: all; }
   .global-token-copy { margin-left: auto; background: #2a2a2a; border: 0.5px solid #444; color: #ccc; font-size: 11px; padding: 4px 12px; border-radius: 6px; cursor: pointer; }
   .global-token-copy:hover { background: #333; }
+
+  .gws-ws-checkbox { width: 17px; height: 17px; accent-color: #f5813e; cursor: pointer; }
+
+  .wsd-summary-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 10px; }
+  .wsd-summary-card { background: #fff; border: 0.5px solid #e0dfd8; border-radius: 8px; padding: 12px 14px; display: flex; align-items: center; gap: 10px; }
+  .wsd-summary-card i { font-size: 20px; color: #f5813e; flex-shrink: 0; }
+  .wsd-summary-label { font-size: 11px; color: #999; }
+  .wsd-summary-value { font-size: 13px; font-weight: 600; color: #222; }
+  .wsd-status-badge { display: inline-block; background: #eee; color: #555; font-size: 11px; padding: 2px 10px; border-radius: 10px; margin-left: 8px; }
+  .wsd-block-title { font-size: 15px; font-weight: 700; color: #1a1a1a; margin: 18px 0 10px; }
+  .wsd-block-title:first-child { margin-top: 0; }
 
   .micro-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-top: 14px; }
   .micro-card { background: #fff; border: 0.5px solid #e0dfd8; border-radius: 10px; padding: 18px; text-align: center; position: relative; }
@@ -409,6 +420,7 @@
 <script>
 var TOKEN_PROGRAMACION_APAGADO = "FLX-9K7M2-APG1900-LV4Q-MAD01X";
 var grupoWSState = { activeGroup: null, activeTab: 'detalles', editingWorkspaces: false, tempSelection: [] };
+var wsDetailState = { deviceId: null, section: 'general' };
 var TARGET_OP_ID = 2;
 
 var state = { finished:false, currentPage:'inicio' };
@@ -551,6 +563,11 @@ function goPage(page){
     renderWorkspaces();
     var wsSearch = document.getElementById('ws-search');
     if (wsSearch) wsSearch.addEventListener('input', function(){ renderWorkspaces(wsSearch.value); });
+  }
+  else if (page === 'workspacedetail'){
+    area.innerHTML = pageWorkspaceDetail();
+    wireWSDetail();
+    renderWSDetailSection('general');
   }
   else if (page === 'sesiones') area.innerHTML = pageSesiones();
   else if (page === 'gruposworkspaces'){
@@ -819,16 +836,18 @@ function pageAlertConfig(){
 /* ===================== WORKSPACES ===================== */
 var wsRows = [
   {nombre:"11LAP1JY0V74.indra.es",estado:"Desconectado",ip:"10.22.192.9",grupo:"Oficina Indra",tipo:"Físico",conex:"Ethernet",ultimo:"21/8/26, 14:59:01"},
-  {nombre:"5CD54685XF",estado:"Desconectado",ip:"192.168.1.151",grupo:"RP Training",tipo:"Físico",conex:"Wifi",ultimo:"13/8/26, 23:44:58"},
-  {nombre:"AEC-5HDHJR3",estado:"Desconectado",ip:"172.20.156.93",grupo:"RP Training",tipo:"Físico",conex:"Wifi",ultimo:"14/8/26, 0:27:00"},
+  {nombre:"5CD54685XF",estado:"Desconectado",ip:"192.168.1.151",grupo:"RP Training",tipo:"Físico",conex:"Wifi",ultimo:"13/8/26, 23:44:58",warn:true},
+  {nombre:"AEC-5HDHJR3",estado:"Desconectado",ip:"172.20.156.93",grupo:"RP Training",tipo:"Físico",conex:"Wifi",ultimo:"14/8/26, 0:27:00",warn:true},
   {nombre:"DESKTOP-DEFE7N5",estado:"Desconectado",ip:"192.168.1.131",grupo:"RP Training",tipo:"Virtual",conex:"Ethernet",ultimo:"1/9/26, 11:49:01"},
+  {nombre:"DESKTOP-T5EH32O",estado:"Desconectado",ip:"192.168.105.125",grupo:"RP Training",tipo:"Virtual",conex:"Wifi",ultimo:"2/9/26, 18:40:11"},
+  {nombre:"Flexxible-Cice",estado:"Conectado",ip:"10.0.2.15",grupo:"RP Training",tipo:"Virtual",conex:"Ethernet",ultimo:"4/9/26, 9:12:03"},
   {nombre:"LAPTOP-B1TODCH9",estado:"Desconectado",ip:"-",grupo:"RP Training",tipo:"Físico",conex:"-",ultimo:"20/8/26, 8:30:07"}
 ];
 
 function pageWorkspaces(){
   return '<div class="page"><div class="page-header">' + enunciadoHtml() + '<div style="font-size:18px;font-weight:600;color:#1a1a1a;margin-bottom:8px;">Flexxible Training Site - Workspaces</div></div>' +
   '<div class="toolbar"><div class="btn-tool"><i class="ti ti-device-desktop"></i> Asistencia remota</div><div class="btn-tool"><i class="ti ti-trash"></i> Eliminar workspaces</div><div class="btn-tool"><i class="ti ti-file-export"></i> Exportar</div><div style="flex:1"></div><div class="search-box"><i class="ti ti-search"></i><input type="text" id="ws-search" placeholder="Buscar por término..."></div><div class="filter-chip">Aplicaciones: <b>Cualquiera</b></div><div class="filter-chip">Grupos de workspaces: <b>Cualquiera</b></div></div>' +
-  '<div class="table-wrap"><table><thead><tr><th>Nombre</th><th>Estado</th><th>Dirección IP</th><th>Grupo de reporte</th><th>Tipo de dispositivo</th><th>Conexión</th><th>Último informe</th></tr></thead><tbody id="ws-tbody"></tbody></table></div>' +
+  '<div class="table-wrap"><table><thead><tr><th style="width:34px;"><input type="checkbox" class="gws-ws-checkbox" id="ws-select-all"></th><th>Nombre</th><th>Estado</th><th>Dirección IP</th><th>Grupo de reporte</th><th>Tipo de dispositivo</th><th>Conexión</th><th>Último informe</th></tr></thead><tbody id="ws-tbody"></tbody></table></div>' +
   '<div style="padding:8px 18px;font-size:11px;color:#888;" id="ws-count"></div></div>';
 }
 
@@ -843,11 +862,321 @@ function renderWorkspaces(filterText){
            r.tipo.toLowerCase().indexOf(q) !== -1;
   });
   tbody.innerHTML = filtered.map(function(r){
-    return '<tr><td class="desc-link">' + r.nombre + '</td><td>' + r.estado + '</td><td>' + r.ip + '</td><td>' + r.grupo + '</td><td>' + r.tipo + '</td><td>' + r.conex + '</td><td>' + r.ultimo + '</td></tr>';
+    var warnIcon = r.warn ? ' <i class="ti ti-alert-triangle" style="color:#d97706;font-size:13px;"></i>' : '';
+    return '<tr><td style="width:34px;"><input type="checkbox" class="gws-ws-checkbox ws-row-check"></td><td class="desc-link" data-ws-open="' + r.nombre + '" style="cursor:pointer;">' + r.nombre + warnIcon + '</td><td>' + r.estado + '</td><td>' + r.ip + '</td><td>' + r.grupo + '</td><td>' + r.tipo + '</td><td>' + r.conex + '</td><td>' + r.ultimo + '</td></tr>';
   }).join('');
+  tbody.querySelectorAll('[data-ws-open]').forEach(function(el){
+    el.addEventListener('click', function(){ openWorkspaceDetail(el.dataset.wsOpen); });
+  });
+  var selectAll = document.getElementById('ws-select-all');
+  if (selectAll) selectAll.addEventListener('change', function(){
+    tbody.querySelectorAll('.ws-row-check').forEach(function(cb){ cb.checked = selectAll.checked; });
+  });
   var countEl = document.getElementById('ws-count');
   if (countEl) countEl.textContent = filtered.length + ' resultado' + (filtered.length === 1 ? '' : 's');
 }
+
+/* ===================== DETALLE DE DISPOSITIVO WORKSPACE ===================== */
+
+function openWorkspaceDetail(id){
+  wsDetailState.deviceId = id;
+  wsDetailState.section = 'general';
+  goPage('workspacedetail');
+}
+
+var VISION_GENERAL_TABS = ['general','dispositivo','recursos','conectividad','seguridad','actualizacion','so','flexxagent','ampliado','virtualizacion','camposperso'];
+var DIAGNOSTICO_TABS = ['diagnostico'];
+
+var wsDetailData = {
+  "DESKTOP-DEFE7N5": {
+    estado:"Desconectado", so:"Microsoft Windows 10 Enterprise E...", tipo:"Virtual Desktop", ultimoUsuario:"DESKTOP-DEFE7N5\\Training", conexion:"Ethernet",
+    ip:"192.168.1.131", flexxVersion:"26.6.1.5", flexxUltimo:"4/9/26, 12:51:19",
+    general:{Nombre:"DESKTOP-DEFE7N5",Dominio:"-",OU:"-","Tiempo de conexión":"4/9/26, 12:04:01","Último usuario":"DESKTOP-DEFE7N5\\Training",
+      "Utilización actual de la CPU":"-","Utilización actual de la RAM":"-",Código:"-",Descripción:"-","Tiempo de actividad":"-","Tiempo de inactividad":"-","Último reinicio":"-"},
+    dispositivo:{"Fabricante del SO":"Microsoft Corporation","Modelo de sistema":"Virtual Machine","Tipo de sistema":"x64-based PC","SKU del sistema":"None",
+      "Procesador":"11th Gen Intel(R) Core(TM) i7-11...","Fecha del BIOS":"25/9/25, 2:00:00","Número de serie del BIOS":"4565-8080-1401-0778-8305-25...",
+      "Rol de la plataforma":"Mobile","Dispositivo de arranque":"\\Device\\HarddiskVolume2","Configuración regional":"English (United States)",
+      "Zona horaria":"Romance Standard Time","Duración del último arranque":"0m 6s","Inicio rápido":"Sí"},
+    recursos:{"Núcleos de CPU":"4","Total de RAM":"2.49 GB","Espacio del archivo de paginación":"704 MB","Archivo de paginación":"C:\\pagefile.sys",
+      "Uso del Disco del Sistema":"26%","Tamaño total del disco duro":"93.7 GB free of 127.0 GB"},
+    conectividad:{"Conexión":"Ethernet","Versión de IP":"-","Dirección IP":"192.168.1.131","Subred":"192.168.1.0/24","Puerta de enlace predeterminada":"192.168.1.1",
+      "MAC de encendido por LAN":"00-15-5D-38-01-10","Red cambiada":"-"},
+    seguridad:{"Disco duro encriptado":"No cifrado","Estado de arranque seguro":"On","Última actualización de Windows":"15/10/25, 2:00:00",
+      "Número de días desde la última actualización":"327","Reinicio pendiente":"No","Protección DMA de kernel":"-","EDR":"-",
+      "Estado de EDR":"Not installed","Antivirus":"Windows Defender","Estado del antivirus":"Installed (Working)"},
+    actualizacion:{"Destino":"Equipos","Número de actualizaciones pendientes":"3","Última actualización de Windows":"15/10/25, 2:00:00",
+      "Reinicio pendiente":"No","Número de días desde la última actualización":"327"},
+    so2:{"SO":"Microsoft Windows 10 Enterpris...","Versión del SO":"10.0.19044.19044","Compilación del SO":"10.0.19044.1288",
+      "Directorio de Windows":"C:\\Windows","Directorio del sistema":"C:\\Windows\\system32"},
+    flexxAgent:{"Grupo de reporte":"RP Training","Versión de FlexxAgent":"26.6.1.5","Estado del cliente VDI":"Stopped",
+      "Último informe":"4/9/26, 12:51:19","Session Analyzer":"Configured","Versión de Session Analyzer":"3.0.4"},
+    ampliado:{"Versión del BIOS":"VRTUAL - 1","Versión de SMBIOS":"Hyper-V UEFI Release v4.1","Versión del controlador integrado":"255.255",
+      "Modo de BIOS":"UEFI","Fabricante de la placa base":"Microsoft Corporation","Modelo de placa base":"Virtual Machine",
+      "Versión de la placa base":"Hyper-V UEFI Release v4.1","ID único":"e1aae262d78633e741118bed96...","Tipo de Windows":"Workstation",
+      "Fecha de creación":"14/10/25, 14:21:03","Días para Eliminación":"28","Fecha de Eliminación":"5/10/26, 12:51:19"},
+    virtualizacion:{"Hipervisor":"Hyper-V","Granja/Cluster":"-","Broker":"None","Estado":"Disconnected","Estado de registro":"-",
+      "Modo de mantenimiento":"-","Tipo":"Dispositivo","Conectado desde":"-"},
+    camposperso:{"Disk Type":"Unspecified","BIOS Year":"2025","IP Ethernet":"192.168.1.131","MAC Address Ethernet":"00-15-5D-38-01-10",
+      "EDR Product":"Not Found","FlexxAgent Proxy Url":"Not configured","Device Model":"Virtual Machine","Processor Model":"11th Gen Intel(R) Core(TM) i7-11...",
+      "Antivirus Product":"Windows Defender","MonitorSerial":"Not Detected"},
+    apps:[
+      ["7-Zip 23.01 (x64)","Igor Pavlov","23.01","25/8/26, 9:19:03","C:\\Program Files\\7-Zip\\"],
+      ["Blender","Blender Foundation","5.1.1","23/4/26, 0:00:00","C:\\Program Files\\Blender Foundation\\Blender 5.1\\"],
+      ["FlexxAgent","Flexxible","26.6.1","18/12/25, 0:00:00","C:\\Program Files\\Flexxible\\FlexxAgent"],
+      ["HttpToUsbBridge","Brother Industries Ltd.","2.6.123.1","14/4/26, 0:00:00","C:\\Program Files (x86)\\Brother\\HttpToUsbBridge"],
+      ["Microsoft Edge","Microsoft Corporation","152.0.4191.62","4/9/26, 0:00:00","C:\\Program Files (x86)\\Microsoft\\Edge\\Application"],
+      ["Microsoft Update Health Tools","Microsoft Corporation","3.74.0.0","14/10/25, 0:00:00","C:\\Program Files\\Microsoft Update Health Tools"],
+      ["Microsoft Visual C++ 2010 x64 Redistributable - 10...","Microsoft Corporation","10.0.30319","14/4/26, 0:00:00","c:\\Program Files\\Common Files\\Microsoft Shared\\VC"],
+      ["Microsoft Visual C++ 2010 x86 Redistributable - 10...","Microsoft Corporation","10.0.30319","14/4/26, 0:00:00","c:\\Program Files (x86)\\Common Files\\Microsoft Shared\\VC"],
+      ["Microsoft Visual C++ 2015-2022 Redistributable (x6...","Microsoft Corporation","14.44.35211.0","4/6/26, 13:36:14","C:\\ProgramData\\Package Cache\\{d8bbe9f9-7c5b-42c6-b715-9ee898a2e515}"],
+      ["Npcap","Nmap Project","1.88","4/6/26, 13:36:17","C:\\Program Files\\Npcap"],
+      ["uniFLOW Universal Driver","NT-ware","1.00.0000","28/5/26, 0:00:00","C:\\Program Files (x86)\\NT-ware\\uniFLOW Universal Driver"]
+    ],
+    badges:{apps:11,alertas:0,operaciones:121,notificaciones:0,sesiones:0,servicios:233,discos:2,historialGrupos:8,eventosPnP:0,erroresPnP:0,historialVersiones:6,actInstaladas:82,actPendientes:2,gruposWS:7}
+  }
+};
+
+var APP_POOL = [
+  ["7-Zip 23.01 (x64)","Igor Pavlov","23.01","25/8/26, 9:19:03","C:\\Program Files\\7-Zip\\"],
+  ["Google Chrome","Google LLC","128.0.6613.138","20/8/26, 10:00:00","C:\\Program Files\\Google\\Chrome\\Application"],
+  ["Microsoft Edge","Microsoft Corporation","152.0.4191.62","4/9/26, 0:00:00","C:\\Program Files (x86)\\Microsoft\\Edge\\Application"],
+  ["Adobe Acrobat Reader DC","Adobe","24.002.20933","15/7/26, 0:00:00","C:\\Program Files (x86)\\Adobe\\Acrobat Reader DC"],
+  ["Zoom Workplace","Zoom Video Communications","6.1.0","10/8/26, 0:00:00","C:\\Users\\...\\AppData\\Roaming\\Zoom"],
+  ["Microsoft 365 Apps","Microsoft Corporation","16.0.18025","1/9/26, 0:00:00","C:\\Program Files\\Microsoft Office"],
+  ["FlexxAgent","Flexxible","26.6.1","18/12/25, 0:00:00","C:\\Program Files\\Flexxible\\FlexxAgent"],
+  ["Npcap","Nmap Project","1.88","4/6/26, 13:36:17","C:\\Program Files\\Npcap"],
+  ["VLC media player","VideoLAN","3.0.20","5/5/26, 0:00:00","C:\\Program Files\\VideoLAN\\VLC"],
+  ["Notepad++","Notepad++ Team","8.6.9","2/6/26, 0:00:00","C:\\Program Files\\Notepad++"]
+];
+
+function generateDeviceData(id){
+  var mw = masterWorkspaces.filter(function(w){ return w.id === id; })[0] || {};
+  var base = wsRows.filter(function(r){ return r.nombre === id; })[0] || {};
+  var rnd = lcg(hashString(id) || 1);
+  function pick(arr){ return arr[Math.floor(rnd() * arr.length)]; }
+  function bool(){ return rnd() > 0.5; }
+  function pct(){ return Math.floor(rnd() * 100) + '%'; }
+  function pickApps(n){
+    var pool = APP_POOL.slice(), out = [];
+    for (var i = 0; i < n && pool.length > 0; i++){
+      var idx = Math.floor(rnd() * pool.length);
+      out.push(pool[idx]);
+      pool.splice(idx, 1);
+    }
+    return out;
+  }
+
+  var tipo = mw.tipo || (base.tipo === 'Virtual' ? 'Virtual Desktop' : 'Physical device');
+  var esVirtual = tipo === 'Virtual Desktop';
+  var so = mw.so || pick(['Microsoft Windows 11 Pro 25H2','Microsoft Windows 11 Pro 24H2','Microsoft Windows 10 Enterprise Evaluation']);
+  var cpu = mw.cpu || String(pick([2,4,6,8,12]));
+  var ram = mw.ram ? (Math.round(mw.ram/1024*100)/100 + ' GB') : (pick([4,8,16,32]) + ' GB');
+  var usuario = mw.usuario || (id + '\\Usuario');
+  var ip = mw.ip || base.ip || '-';
+  var procesador = pick(['11th Gen Intel(R) Core(TM) i7-11...','10th Gen Intel(R) Core(TM) i5-10...','AMD Ryzen 5 5600']);
+  var fabricante = esVirtual ? 'Microsoft Corporation' : pick(['Dell Inc.','HP','Lenovo']);
+  var modelo = esVirtual ? 'Virtual Machine' : pick(['OptiPlex 7090','ProDesk 600 G6','ThinkCentre M720']);
+
+  return {
+    estado: base.estado || 'Desconectado', so: so, tipo: tipo, ultimoUsuario: usuario, conexion: base.conex || pick(['Ethernet','Wifi']),
+    ip: ip, flexxVersion: pick(['26.6.1.5','26.5.0.2','26.6.0.9']), flexxUltimo: '4/9/26, ' + pick(['08:10','10:25','14:33']),
+    general: { Nombre: id, Dominio: '-', OU: '-', 'Tiempo de conexión': '4/9/26, 0' + pick([7,8,9]) + ':' + pick(['12','45','03']) + ':00',
+      'Último usuario': usuario, 'Utilización actual de la CPU': pct(), 'Utilización actual de la RAM': pct(), Código: '-', Descripción: '-',
+      'Tiempo de actividad': pick(['2h 15m','5h 40m','1d 3h']), 'Tiempo de inactividad': pick(['10m','35m','2h']), 'Último reinicio': '3/9/26, 22:1' + pick([0,5]) + ':00' },
+    dispositivo: { 'Fabricante del SO': fabricante, 'Modelo de sistema': modelo, 'Tipo de sistema': 'x64-based PC', 'SKU del sistema': pick(['None','SKU-01A','SKU-22B']),
+      Procesador: procesador, 'Fecha del BIOS': '1' + pick([2,5,8]) + '/' + pick([3,6,9]) + '/25, 2:00:00', 'Número de serie del BIOS': pick(['SN-3321-AAB','SN-9981-CCX','SN-4471-QZP']),
+      'Rol de la plataforma': pick(['Mobile','Desktop']), 'Dispositivo de arranque': '\\Device\\HarddiskVolume2', 'Configuración regional': 'Spanish (Spain)',
+      'Zona horaria': 'Romance Standard Time', 'Duración del último arranque': pick(['0m 6s','1m 12s','45s']), 'Inicio rápido': bool() ? 'Sí' : 'No' },
+    recursos: { 'Núcleos de CPU': String(cpu), 'Total de RAM': ram, 'Espacio del archivo de paginación': pick(['512 MB','704 MB','1024 MB']),
+      'Archivo de paginación': 'C:\\pagefile.sys', 'Uso del Disco del Sistema': pct(), 'Tamaño total del disco duro': pick(['93.7 GB free of 127.0 GB','210 GB free of 512 GB','40 GB free of 256 GB']) },
+    conectividad: { Conexión: base.conex || 'Ethernet', 'Versión de IP': '-', 'Dirección IP': ip,
+      Subred: ip !== '-' ? ip.split('.').slice(0,3).join('.') + '.0/24' : '-',
+      'Puerta de enlace predeterminada': ip !== '-' ? ip.split('.').slice(0,3).join('.') + '.1' : '-',
+      'MAC de encendido por LAN': pick(['00-15-5D-38-01-10','AC-DE-48-00-11-22','B8-27-EB-4A-9C-01']), 'Red cambiada': '-' },
+    seguridad: { 'Disco duro encriptado': bool() ? 'Cifrado' : 'No cifrado', 'Estado de arranque seguro': bool() ? 'On' : 'Off',
+      'Última actualización de Windows': '1' + pick([0,2,5]) + '/9/26, 2:00:00', 'Número de días desde la última actualización': String(pick([5,15,45,120])),
+      'Reinicio pendiente': bool() ? 'Sí' : 'No', 'Protección DMA de kernel': '-', EDR: '-', 'Estado de EDR': pick(['Not installed','Installed']),
+      Antivirus: 'Windows Defender', 'Estado del antivirus': pick(['Installed (Working)','Installed (At risk)']) },
+    actualizacion: { Destino: 'Equipos', 'Número de actualizaciones pendientes': String(pick([0,1,3,5])),
+      'Última actualización de Windows': '1' + pick([0,2,5]) + '/9/26, 2:00:00', 'Reinicio pendiente': bool() ? 'Sí' : 'No',
+      'Número de días desde la última actualización': String(pick([5,15,45,120])) },
+    so2: { SO: so, 'Versión del SO': pick(['10.0.19044.19044','10.0.22631.4890','10.0.26100.1000']), 'Compilación del SO': pick(['10.0.19044.1288','10.0.22631.4890']),
+      'Directorio de Windows': 'C:\\Windows', 'Directorio del sistema': 'C:\\Windows\\system32' },
+    flexxAgent: { 'Grupo de reporte': base.grupo || 'RP Training', 'Versión de FlexxAgent': pick(['26.6.1.5','26.5.0.2']), 'Estado del cliente VDI': pick(['Stopped','Running']),
+      'Último informe': '4/9/26, ' + pick(['08:10','10:25','14:33']), 'Session Analyzer': pick(['Configured','Not configured']), 'Versión de Session Analyzer': '3.0.4' },
+    ampliado: { 'Versión del BIOS': pick(['VRTUAL - 1','A21','F.64']), 'Versión de SMBIOS': pick(['Hyper-V UEFI Release v4.1','3.2','2.8']),
+      'Versión del controlador integrado': pick(['255.255','1.14.0']), 'Modo de BIOS': pick(['UEFI','Legacy']), 'Fabricante de la placa base': fabricante,
+      'Modelo de placa base': modelo, 'Versión de la placa base': pick(['Hyper-V UEFI Release v4.1','A01','1.0']),
+      'ID único': pick(['e1aae262d78633e741118bed96...','a29cc031bb217623b556ab...']), 'Tipo de Windows': 'Workstation',
+      'Fecha de creación': '1' + pick([2,4,8]) + '/9/25, 14:21:03', 'Días para Eliminación': String(pick([0,15,28])), 'Fecha de Eliminación': '5/10/26, 12:51:19' },
+    virtualizacion: esVirtual
+      ? { Hipervisor: 'Hyper-V', 'Granja/Cluster': '-', Broker: 'None', Estado: pick(['Disconnected','Connected']), 'Estado de registro': '-', 'Modo de mantenimiento': '-', Tipo: 'Dispositivo', 'Conectado desde': '-' }
+      : { Hipervisor: '-', 'Granja/Cluster': '-', Broker: '-', Estado: '-', 'Estado de registro': '-', 'Modo de mantenimiento': '-', Tipo: 'Físico', 'Conectado desde': '-' },
+    camposperso: { 'Disk Type': pick(['Unspecified','SSD','HDD']), 'BIOS Year': pick(['2023','2024','2025']), 'IP Ethernet': ip,
+      'MAC Address Ethernet': pick(['00-15-5D-38-01-10','AC-DE-48-00-11-22']), 'EDR Product': pick(['Not Found','CrowdStrike']),
+      'FlexxAgent Proxy Url': 'Not configured', 'Device Model': modelo, 'Processor Model': procesador, 'Antivirus Product': 'Windows Defender',
+      MonitorSerial: pick(['Not Detected','SN-2231XZ']) },
+    apps: pickApps(pick([4,5,6,7])),
+    badges: { apps: pick([5,8,11,14]), alertas: pick([0,0,1,2]), operaciones: pick([20,50,90,150]), notificaciones: 0, sesiones: pick([0,1]),
+      servicios: pick([180,210,233]), discos: pick([1,2]), historialGrupos: pick([2,5,8]), eventosPnP: 0, erroresPnP: 0,
+      historialVersiones: pick([1,3,6]), actInstaladas: pick([40,60,82]), actPendientes: pick([0,1,2,3]), gruposWS: pick([1,3,7]) }
+  };
+}
+
+function getDeviceDetailData(id){
+  return wsDetailData[id] || generateDeviceData(id);
+}
+
+function fieldBlockHtml(anchorId, title, obj){
+  var keys = Object.keys(obj || {});
+  var cells = keys.map(function(k){
+    return '<div><div class="gws-field-label">' + k + '</div><div class="gws-field-value">' + (obj[k] || '-') + '</div></div>';
+  }).join('');
+  if (keys.length === 0) cells = '<div style="color:#999;font-size:12px;">Sin datos adicionales</div>';
+  return '<div id="' + anchorId + '"><div class="wsd-block-title">' + title + '</div><div class="gws-card"><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;">' + cells + '</div></div></div>';
+}
+
+function pageWorkspaceDetail(){
+  var id = wsDetailState.deviceId;
+  return '<div class="page"><div class="page-header">' + enunciadoHtml() +
+    '<div class="breadcrumb"><a id="wsdet-back">Workspaces</a><i class="ti ti-chevron-right" style="font-size:11px;"></i><span style="color:#555;">' + id + '</span><span class="wsd-status-badge" id="wsdet-status"></span></div>' +
+  '</div>' +
+  '<div class="page" style="padding:0 20px;">' +
+    '<div style="font-size:12px;color:#aaa;margin-bottom:10px;"><i class="ti ti-device-desktop"></i> Asistencia remota</div>' +
+    '<div id="wsdet-summary"></div>' +
+    '<div class="detail-layout" style="margin-top:16px;">' +
+      '<div class="detail-sidebar" style="width:220px;" id="wsdet-sidebar"></div>' +
+      '<div class="events-panel" id="wsdet-content" style="overflow-y:auto;"></div>' +
+    '</div>' +
+  '</div></div>';
+}
+
+function wireWSDetail(){
+  document.getElementById('wsdet-back').addEventListener('click', function(){ goPage('workspaces'); });
+  var d = getDeviceDetailData(wsDetailState.deviceId);
+  document.getElementById('wsdet-status').textContent = d.estado;
+
+  document.getElementById('wsdet-summary').innerHTML =
+    '<div class="wsd-summary-grid">' +
+      '<div class="wsd-summary-card"><i class="ti ti-device-desktop"></i><div><div class="wsd-summary-label">Estado</div><div class="wsd-summary-value">' + d.estado + '</div></div></div>' +
+      '<div class="wsd-summary-card"><i class="ti ti-brand-windows"></i><div><div class="wsd-summary-label">SO</div><div class="wsd-summary-value">' + d.so + '</div></div></div>' +
+      '<div class="wsd-summary-card"><i class="ti ti-cloud"></i><div><div class="wsd-summary-label">Tipo</div><div class="wsd-summary-value">' + d.tipo + '</div></div></div>' +
+      '<div class="wsd-summary-card"><i class="ti ti-user"></i><div><div class="wsd-summary-label">Último usuario</div><div class="wsd-summary-value">' + d.ultimoUsuario + '</div></div></div>' +
+      '<div class="wsd-summary-card"><i class="ti ti-plug"></i><div><div class="wsd-summary-label">Conexión</div><div class="wsd-summary-value">' + d.conexion + '</div></div></div>' +
+    '</div>' +
+    '<div class="wsd-summary-grid" style="grid-template-columns:repeat(3,1fr);">' +
+      '<div class="wsd-summary-card"><i class="ti ti-map-pin"></i><div><div class="wsd-summary-label">Dirección IP</div><div class="wsd-summary-value">' + d.ip + '</div></div></div>' +
+      '<div class="wsd-summary-card"><i class="ti ti-tag"></i><div><div class="wsd-summary-label">FlexxAgent Versión</div><div class="wsd-summary-value">' + d.flexxVersion + '</div></div></div>' +
+      '<div class="wsd-summary-card"><i class="ti ti-clock"></i><div><div class="wsd-summary-label">FlexxAgent Último informe</div><div class="wsd-summary-value">' + d.flexxUltimo + '</div></div></div>' +
+    '</div>';
+}
+
+function wsDetailSidebarHtml(activeSection){
+  var d = getDeviceDetailData(wsDetailState.deviceId);
+  var b = d.badges;
+  function item(section, label){
+    return '<div class="detail-nav-item' + (section === activeSection ? ' active' : '') + '" data-section="' + section + '">' + label + '</div>';
+  }
+  function flatItem(section, label, badge){
+    var count = badge != null ? '<span class="detail-nav-count' + (badge > 0 ? ' blue' : '') + '">' + badge + '</span>' : '';
+    return '<div class="detail-nav-item' + (section === activeSection ? ' active' : '') + '" data-section="' + section + '">' + label + count + '</div>';
+  }
+  return '<div class="detail-section-title">Visión general</div>' +
+    item('general','General') + item('dispositivo','Dispositivo') + item('recursos','Recursos') + item('conectividad','Conectividad') +
+    item('seguridad','Seguridad') + item('actualizacion','Actualización') + item('so','SO') + item('flexxagent','FlexxAgent') +
+    item('ampliado','Ampliado') + item('virtualizacion','Virtualización') + item('camposperso','Campos personalizados') +
+    '<div class="detail-section-title" style="margin-top:12px;">Diagnóstico</div>' +
+    flatItem('diagnostico','Diagnóstico', null) +
+    '<div style="border-top:0.5px solid #e0dfd8;margin:10px 0;"></div>' +
+    flatItem('appsinstaladas','Aplicaciones instaladas', b.apps) +
+    flatItem('alertasactivas','Alertas activas', b.alertas) +
+    flatItem('operacionesws','Operaciones', b.operaciones) +
+    flatItem('notificacionesws','Notificaciones', b.notificaciones) +
+    flatItem('sesionesws','Sesiones', b.sesiones) +
+    flatItem('serviciosws','Servicios de Windows', b.servicios) +
+    flatItem('discosws','Discos', b.discos) +
+    flatItem('histgrupos','Historial de grupos de reporte', b.historialGrupos) +
+    flatItem('eventospnp','Eventos de PnP', b.eventosPnP) +
+    flatItem('errorespnp','Errores PnP', b.erroresPnP) +
+    flatItem('histversiones','Historial de versiones', b.historialVersiones) +
+    flatItem('histarranque','Historial de arranque', null) +
+    flatItem('actinstaladasws','Actualizaciones instaladas', b.actInstaladas) +
+    flatItem('actpendientesws','Actualizaciones pendientes', b.actPendientes) +
+    flatItem('gruposws2','Grupos de Workspaces', b.gruposWS);
+}
+
+function wireWSDetailSidebarClicks(){
+  document.querySelectorAll('#wsdet-sidebar .detail-nav-item').forEach(function(el){
+    el.addEventListener('click', function(){ renderWSDetailSection(el.dataset.section); });
+  });
+}
+
+function visionGeneralHtml(d){
+  return fieldBlockHtml('vg-general','General', d.general) +
+    fieldBlockHtml('vg-dispositivo','Dispositivo', d.dispositivo) +
+    fieldBlockHtml('vg-recursos','Recursos', d.recursos) +
+    fieldBlockHtml('vg-conectividad','Conectividad', d.conectividad) +
+    fieldBlockHtml('vg-seguridad','Seguridad', d.seguridad) +
+    fieldBlockHtml('vg-actualizacion','Actualización', d.actualizacion) +
+    fieldBlockHtml('vg-so','SO', d.so2) +
+    fieldBlockHtml('vg-flexxagent','FlexxAgent', d.flexxAgent) +
+    fieldBlockHtml('vg-ampliado','Ampliado', d.ampliado) +
+    fieldBlockHtml('vg-virtualizacion','Virtualización', d.virtualizacion) +
+    fieldBlockHtml('vg-camposperso','Campos personalizados', d.camposperso);
+}
+
+function simpleMetricChart(title, subtitle, hasData){
+  var series = [{ name: title, color: '#f5813e', values: hasData ? [2,3,5,20,60,90,60,20,5,3,2,1,1,1,1,1,1,1,1,1] : [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0] }];
+  return '<div class="wsd-block-title" style="margin-top:0;">' + title + '</div>' +
+    '<div style="font-size:11px;color:#888;margin-bottom:8px;">' + subtitle + '</div>' +
+    '<div class="gws-card">' + lineChartHtml(series, 100, 900, 180) + '</div>';
+}
+
+function diagnosticoHtml(d){
+  var hasData = wsDetailState.deviceId === 'DESKTOP-DEFE7N5';
+  return '<div id="dg-cpu">' + simpleMetricChart('CPU', '% CPU (últimas 24 horas)', hasData) + '</div>' +
+    '<div id="dg-ram">' + simpleMetricChart('RAM', '% de RAM (últimas 24 horas)', hasData) + '</div>' +
+    '<div id="dg-gpu">' + simpleMetricChart('GPU', '% GPU (últimas 24 horas)', false) + '</div>' +
+    '<div id="dg-red">' + simpleMetricChart('Red', 'Uso de red (últimas 24 horas)', false) + '</div>' +
+    '<div id="dg-disco">' + simpleMetricChart('Disco', 'Uso de disco (últimas 24 horas)', false) + '</div>' +
+    '<div id="dg-diagapps">' + fieldBlockHtml('dg-diagapps-inner','Aplicaciones (uso de recursos)', {}) + '</div>' +
+    '<div id="dg-procesos">' + fieldBlockHtml('dg-procesos-inner','Procesos', {}) + '</div>';
+}
+
+function wsAppsInstaladasHtml(d){
+  var rows = d.apps.map(function(a){
+    return '<tr><td class="desc-link">' + a[0] + '</td><td>' + a[1] + '</td><td>' + a[2] + '</td><td>' + a[3] + '</td><td>' + a[4] + '</td></tr>';
+  }).join('');
+  return '<div class="toolbar" style="padding:0 0 10px;background:transparent;border:none;"><div class="btn-tool"><i class="ti ti-file-export"></i> Exportar</div><div class="btn-tool"><i class="ti ti-refresh"></i> Recargar</div></div>' +
+    '<div class="search-box" style="max-width:280px;margin-bottom:10px;"><i class="ti ti-search"></i><input placeholder="Buscar por término..."></div>' +
+    '<div class="table-wrap"><table><thead><tr><th>Nombre</th><th>Editor</th><th>Versión</th><th>Instalado a la...</th><th>Ubicación de instalación</th></tr></thead><tbody>' +
+    (rows || '<tr><td colspan="5" style="color:#999;">Sin aplicaciones registradas</td></tr>') + '</tbody></table></div>' +
+    '<div style="padding:8px 0;font-size:11px;color:#888;">Página 1 de 1 · Mostrando 1 a ' + d.apps.length + ' de ' + d.apps.length + ' resultados</div>';
+}
+
+function renderWSDetailSection(section){
+  wsDetailState.section = section;
+  var sidebar = document.getElementById('wsdet-sidebar');
+  if (sidebar){ sidebar.innerHTML = wsDetailSidebarHtml(section); wireWSDetailSidebarClicks(); }
+  var content = document.getElementById('wsdet-content');
+  if (!content) return;
+  var d = getDeviceDetailData(wsDetailState.deviceId);
+
+  if (VISION_GENERAL_TABS.indexOf(section) !== -1){
+    content.innerHTML = visionGeneralHtml(d);
+    var anchor = document.getElementById('vg-' + section);
+    if (anchor) anchor.scrollIntoView({ block: 'start' });
+  } else if (DIAGNOSTICO_TABS.indexOf(section) !== -1){
+    content.innerHTML = diagnosticoHtml(d);
+    var anchor2 = document.getElementById('dg-' + section);
+    if (anchor2) anchor2.scrollIntoView({ block: 'start' });
+  } else if (section === 'appsinstaladas'){
+    content.innerHTML = wsAppsInstaladasHtml(d);
+  } else {
+    content.innerHTML = '<div class="gws-empty"><i class="ti ti-package"></i>Sección en construcción</div>';
+  }
+}
+
 
 function pageSesiones(){
   return '<div class="page"><div class="page-header">' + enunciadoHtml() + '<div style="font-size:18px;font-weight:600;color:#1a1a1a;margin-bottom:8px;">Sesiones</div></div>' +
@@ -1159,16 +1488,15 @@ function renderWorkspacesEditRows(filterText){
   var filtered = q === '' ? masterWorkspaces : masterWorkspaces.filter(function(w){ return w.id.toLowerCase().indexOf(q) !== -1; });
   tbody.innerHTML = filtered.map(function(w){
     var checked = grupoWSState.tempSelection.indexOf(w.id) !== -1;
-    return '<tr><td class="gws-check-cell" data-wsid="' + w.id + '" style="width:34px;text-align:center;cursor:pointer;padding:10px 0;"><i class="ti ' + (checked ? 'ti-circle-check-filled' : 'ti-circle') + '" style="color:' + (checked ? '#f5813e' : '#ccc') + ';font-size:19px;pointer-events:none;"></i></td>' +
+    return '<tr><td style="width:34px;text-align:center;padding:10px 0;"><input type="checkbox" class="gws-ws-checkbox" data-wsid="' + w.id + '"' + (checked ? ' checked' : '') + '></td>' +
       '<td class="desc-link">' + w.id + '</td><td>' + w.fqdn + '</td><td>' + w.ip + '</td><td>' + w.so + '</td><td>' + w.cpu + '</td><td>' + w.ram + '</td><td>' + w.tipo + '</td><td>' + w.usuario + '</td></tr>';
   }).join('');
-  tbody.querySelectorAll('.gws-check-cell').forEach(function(cell){
-    cell.addEventListener('click', function(){
-      var id = cell.dataset.wsid;
+  tbody.querySelectorAll('.gws-ws-checkbox').forEach(function(cb){
+    cb.addEventListener('change', function(){
+      var id = cb.dataset.wsid;
       var idx = grupoWSState.tempSelection.indexOf(id);
-      if (idx === -1) grupoWSState.tempSelection.push(id);
-      else grupoWSState.tempSelection.splice(idx, 1);
-      renderWorkspacesEditRows(document.getElementById('gws-ws-search').value);
+      if (cb.checked && idx === -1) grupoWSState.tempSelection.push(id);
+      else if (!cb.checked && idx !== -1) grupoWSState.tempSelection.splice(idx, 1);
     });
   });
 }
@@ -1346,10 +1674,7 @@ document.getElementById('sp-hora').addEventListener('input', updatePanelToken);
 document.getElementById('sp-zona').addEventListener('change', updatePanelToken);
 document.querySelectorAll('.sp-day-item input').forEach(function(cb){ cb.addEventListener('change', updatePanelToken); });
 
-function copyTextRobust(text){
-  if (navigator.clipboard && navigator.clipboard.writeText && window.isSecureContext){
-    return navigator.clipboard.writeText(text);
-  }
+function copyViaExecCommand(text){
   return new Promise(function(resolve, reject){
     try {
       var ta = document.createElement('textarea');
@@ -1367,6 +1692,15 @@ function copyTextRobust(text){
   });
 }
 
+function copyTextRobust(text){
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    return navigator.clipboard.writeText(text).catch(function(){
+      return copyViaExecCommand(text);
+    });
+  }
+  return copyViaExecCommand(text);
+}
+
 document.getElementById('global-token-copy').addEventListener('click', function(){
   var txt = document.getElementById('global-token-value').textContent;
   var btn = document.getElementById('global-token-copy');
@@ -1374,8 +1708,7 @@ document.getElementById('global-token-copy').addEventListener('click', function(
     btn.textContent = 'Copiado ✓';
     setTimeout(function(){ btn.textContent = 'Copiar'; }, 1200);
   }).catch(function(){
-    btn.textContent = 'Selecciona y copia';
-    setTimeout(function(){ btn.textContent = 'Copiar'; }, 1800);
+    btn.textContent = 'Copiar';
   });
 });
 
