@@ -408,7 +408,7 @@
 
 <script>
 var TOKEN_PROGRAMACION_APAGADO = "FLX-9K7M2-APG1900-LV4Q-MAD01X";
-var grupoWSState = { activeTab: 'detalles', programaciones: [] };
+var grupoWSState = { activeGroup: null, activeTab: 'detalles', editingWorkspaces: false, tempSelection: [] };
 var TARGET_OP_ID = 2;
 
 var state = { finished:false, currentPage:'inicio' };
@@ -427,11 +427,11 @@ function hashString(s){
   for (var i=0;i<s.length;i++){ h = ((h*33) ^ s.charCodeAt(i)) >>> 0; }
   return h >>> 0;
 }
-function progStateKey(accion, hora, diasArr, zona){
+function progStateKey(grupo, accion, hora, diasArr, zona){
   var diasSorted = (diasArr || []).slice().sort();
-  return 'prog:' + (accion||'') + '|' + (hora||'') + '|' + diasSorted.join(',') + '|' + (zona||'');
+  return 'prog:' + (grupo||'') + '|' + (accion||'') + '|' + (hora||'') + '|' + diasSorted.join(',') + '|' + (zona||'');
 }
-var CORRECT_PROG_KEY = progStateKey('apagar', '19:00', ['Lunes','Martes','Miércoles','Jueves','Viernes'], 'madrid');
+var CORRECT_PROG_KEY = progStateKey('Oficinas Madrid', 'apagar', '19:00', ['Lunes','Martes','Miércoles','Jueves','Viernes'], 'madrid');
 
 function computeToken(seedStr){
   if (seedStr === CORRECT_PROG_KEY) return TOKEN_PROGRAMACION_APAGADO;
@@ -444,6 +444,45 @@ function computeToken(seedStr){
 function updateGlobalToken(seedStr){
   var el = document.getElementById('global-token-value');
   if (el) el.textContent = computeToken(seedStr);
+}
+
+/* Comprueba si, ENTRE TODAS las programaciones creadas (aunque haya
+   otras incorrectas mezcladas), existe alguna que cumpla exactamente
+   los criterios correctos. Si es así, el código correcto se considera
+   "conseguido" de forma permanente para esta pantalla, sin importar
+   en qué orden se crearon las entradas. */
+var GRUPO_EJERCICIO_APAGADO = 'Oficinas Madrid';
+
+function hasCorrectProgramacion(grupo){
+  var lista = programacionesByGroup[grupo] || [];
+  var diasEsperados = ['Jueves','Lunes','Martes','Miércoles','Viernes'];
+  return lista.some(function(p){
+    if (p.accionValue !== 'apagar' || p.horaRaw !== '19:00' || p.zonaValue !== 'madrid') return false;
+    var diasOrdenados = (p.diasRaw || []).slice().sort();
+    return diasOrdenados.length === diasEsperados.length && diasOrdenados.every(function(d,i){ return d === diasEsperados[i]; });
+  });
+}
+
+/* Recalcula el token a partir del CONTENIDO REAL mostrado en pantalla
+   (no solo el nombre de la página), para que cualquier cambio visible
+   -una programación añadida, un resultado de búsqueda distinto, un
+   evento expandido- cambie el código, en cualquier pantalla.
+   Excepción: en la pestaña Programaciones del grupo del ejercicio, si YA
+   existe una entrada que cumple la condición correcta, se muestra el
+   token designado sin importar qué otras entradas (correctas o no) haya
+   también en la lista. */
+function refreshPageToken(){
+  if (state.currentPage === 'grupowsdetail' &&
+      grupoWSState.activeTab === 'programaciones' &&
+      grupoWSState.activeGroup === GRUPO_EJERCICIO_APAGADO &&
+      hasCorrectProgramacion(grupoWSState.activeGroup)){
+    updateGlobalToken(CORRECT_PROG_KEY);
+    return;
+  }
+  var area = document.getElementById('content-area');
+  if (!area) return;
+  var snapshot = area.innerText.replace(/\s+/g, ' ').trim();
+  updateGlobalToken('page:' + state.currentPage + '|' + snapshot);
 }
 
 
@@ -516,8 +555,9 @@ function goPage(page){
   else if (page === 'sesiones') area.innerHTML = pageSesiones();
   else if (page === 'gruposworkspaces'){
     area.innerHTML = pageGruposWorkspaces();
-    var gwsRow = document.querySelector('tr[data-gws]');
-    if (gwsRow) gwsRow.addEventListener('click', function(){ goPage('grupowsdetail'); });
+    renderGruposWS();
+    var gwsSearch = document.getElementById('gruposws-search');
+    if (gwsSearch) gwsSearch.addEventListener('input', function(){ renderGruposWS(gwsSearch.value); });
   }
   else if (page === 'grupowsdetail'){ area.innerHTML = pageGrupoWSDetail(); wireGrupoWSTabs(); renderGrupoWSTab('detalles'); }
   else if (page === 'ubicaciones') area.innerHTML = pageUbicaciones();
@@ -556,8 +596,6 @@ function goPage(page){
   else if (page === 'microcrearia') area.innerHTML = pageMicroCrearIA();
   else if (page === 'microdisenador') area.innerHTML = pageMicroDisenador();
   else area.innerHTML = pageGeneric();
-
-  updateGlobalToken('page:' + page);
 }
 
 function pageInicio(){
@@ -820,27 +858,39 @@ function pageSesiones(){
   '</tbody></table></div></div>';
 }
 
+var gruposWSGroups = [
+  { name: "Oficinas Madrid", tipo: "Estático" },
+  { name: "Menos de 80%", tipo: "Dinámico" },
+  { name: "Equipos sin actualizar más de 30 días", tipo: "Dinámico" },
+  { name: "Dispositivos Encendidos", tipo: "Dinámico" }
+];
+
 function pageGruposWorkspaces(){
-  var rows = [
-    ["Dispositivos Encendidos","Dinámico","0"],
-    ["Dispositivos W11","Estático","1"],
-    ["Equipos sin actualizar más de 30 días","Dinámico","2"],
-    ["Filtro Test Dinamico","Estático","0"],
-    ["Grupo Simón","Estático","0"],
-    ["Grupo dinamico Prueba","Dinámico","0"],
-    ["Grupo estático","Estático","1"],
-    ["Grupo sin seguridad","Estático","4"],
-    ["Menos de 80%","Dinámico","5"],
-    ["Máquinas encendidas","Dinámico","0"],
-    ["Otra prueba de lio","Estático","0"]
-  ];
-  var rowsHtml = rows.map(function(r){
-    var clickable = r[0] === 'Grupo sin seguridad';
-    return '<tr' + (clickable ? ' class="clickable" data-gws="1"' : '') + '><td class="desc-link">' + r[0] + '</td><td>' + r[1] + '</td><td>' + r[2] + '</td></tr>';
-  }).join('');
   return '<div class="page"><div class="page-header">' + enunciadoHtml() + '<div style="font-size:18px;font-weight:600;color:#1a1a1a;margin-bottom:8px;">Flexxible Training Site - Grupos de Workspaces</div></div>' +
-  '<div class="toolbar"><div class="btn-tool"><i class="ti ti-plus"></i> Nuevo</div><div class="btn-tool"><i class="ti ti-file-export"></i> Exportar</div><div style="flex:1"></div><div class="search-box"><i class="ti ti-search"></i><input placeholder="Buscar por término..."></div></div>' +
-  '<div class="table-wrap"><table><thead><tr><th>Nombre</th><th>Tipo</th><th># Workspaces</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div></div>';
+  '<div class="toolbar"><div class="btn-tool"><i class="ti ti-plus"></i> Nuevo</div><div class="btn-tool"><i class="ti ti-file-export"></i> Exportar</div><div style="flex:1"></div><div class="search-box"><i class="ti ti-search"></i><input type="text" id="gruposws-search" placeholder="Buscar por término..."></div></div>' +
+  '<div class="table-wrap"><table><thead><tr><th>Nombre</th><th>Tipo</th><th># Workspaces</th></tr></thead><tbody id="gruposws-tbody"></tbody></table></div>' +
+  '<div style="padding:8px 18px;font-size:11px;color:#888;" id="gruposws-count"></div></div>';
+}
+
+function renderGruposWS(filterText){
+  var tbody = document.getElementById('gruposws-tbody');
+  if (!tbody) return;
+  var q = (filterText || '').trim().toLowerCase();
+  var filtered = q === '' ? gruposWSGroups : gruposWSGroups.filter(function(g){
+    return g.name.toLowerCase().indexOf(q) !== -1 || g.tipo.toLowerCase().indexOf(q) !== -1;
+  });
+  tbody.innerHTML = filtered.map(function(g){
+    var count = (groupMembership[g.name] || []).length;
+    return '<tr class="clickable" data-group="' + g.name + '"><td class="desc-link">' + g.name + '</td><td>' + g.tipo + '</td><td>' + count + '</td></tr>';
+  }).join('');
+  tbody.querySelectorAll('tr[data-group]').forEach(function(tr){
+    tr.addEventListener('click', function(){
+      grupoWSState.activeGroup = tr.dataset.group;
+      goPage('grupowsdetail');
+    });
+  });
+  var countEl = document.getElementById('gruposws-count');
+  if (countEl) countEl.textContent = filtered.length + ' resultado' + (filtered.length === 1 ? '' : 's');
 }
 
 function pageUbicaciones(){
@@ -1011,12 +1061,29 @@ function pageActDestinatarios(){
 
 /* ===================== DETALLE GRUPO DE WORKSPACES (ejercicio de programación) ===================== */
 
-var gwsWorkspaces = [
-  {nombre:"11LAP1JY0V74.indra.es",fqdn:"11LAP1JY0V74.indra.es",ip:"10.22.192.9",so:"Microsoft Windows 11 Pro 25H2",cpu:"14",ram:"15828",tipo:"Physical device"},
-  {nombre:"5CD54685XF",fqdn:"5CD54685XF",ip:"192.168.1.151",so:"Microsoft Windows 11 Pro 25H2",cpu:"12",ram:"15645",tipo:"Physical device"},
-  {nombre:"DESKTOP-DEFE7N5",fqdn:"DESKTOP-DEFE7N5",ip:"192.168.1.131",so:"Microsoft Windows 10 Enterprise Evaluation",cpu:"4",ram:"2489",tipo:"Virtual Desktop"},
-  {nombre:"AEC-5HDHJR3",fqdn:"AEC-5HDHJR3",ip:"172.20.156.93",so:"Microsoft Windows 11 Pro 24H2",cpu:"8",ram:"15761",tipo:"Physical device"}
+var masterWorkspaces = [
+  {id:"DESKTOP-DEFE7N5",fqdn:"DESKTOP-DEFE7N5",ip:"192.168.1.131",so:"Microsoft Windows 10 Enterprise Evaluation",cpu:"4",ram:"2551",tipo:"Virtual Desktop",usuario:"DESKTOP-DEFE7N5\\Training"},
+  {id:"5CD54685XF",fqdn:"5CD54685XF",ip:"192.168.1.151",so:"Microsoft Windows 11 Pro 25H2",cpu:"12",ram:"15645",tipo:"Physical device",usuario:"AzureAD\\MarcBaguéFont"},
+  {id:"AEC-5HDHJR3",fqdn:"AEC-5HDHJR3",ip:"172.20.156.93",so:"Microsoft Windows 11 Pro 24H2",cpu:"8",ram:"15761",tipo:"Physical device",usuario:"AEC-5HDHJR3\\munimadrid"},
+  {id:"LAPTOP-B1TODCH9",fqdn:"LAPTOP-B1TODCH9",ip:"",so:"Microsoft Windows 11 Pro",cpu:"",ram:"",tipo:"Physical device",usuario:""},
+  {id:"Flexxible-Cice",fqdn:"Flexxible-Cice",ip:"10.0.2.15",so:"Microsoft Windows 11 Home",cpu:"8",ram:"8172",tipo:"Virtual Desktop",usuario:""},
+  {id:"DESKTOP-T5EH32O",fqdn:"DESKTOP-T5EH32O",ip:"192.168.105.125",so:"Microsoft Windows 10 Home",cpu:"7",ram:"4094",tipo:"Virtual Desktop",usuario:"DESKTOP-T5EH32O\\Xavi"},
+  {id:"11LAP1JY0V74.indra.es",fqdn:"11LAP1JY0V74.indra.es",ip:"10.22.192.6",so:"Microsoft Windows 11 Pro 25H2",cpu:"14",ram:"15828",tipo:"Physical device",usuario:"INDRA\\eaberasturi"}
 ];
+
+var groupMembership = {
+  "Oficinas Madrid": ["DESKTOP-DEFE7N5","5CD54685XF","AEC-5HDHJR3","11LAP1JY0V74.indra.es"],
+  "Menos de 80%": ["5CD54685XF","AEC-5HDHJR3","LAPTOP-B1TODCH9","Flexxible-Cice","DESKTOP-T5EH32O"],
+  "Equipos sin actualizar más de 30 días": ["DESKTOP-DEFE7N5","11LAP1JY0V74.indra.es"],
+  "Dispositivos Encendidos": []
+};
+
+var programacionesByGroup = {
+  "Oficinas Madrid": [],
+  "Menos de 80%": [],
+  "Equipos sin actualizar más de 30 días": [],
+  "Dispositivos Encendidos": []
+};
 
 var gwsApps = [
   ["7-Zip 23.01 (x64)","Igor Pavlov","23.01","Windows","1"],
@@ -1041,10 +1108,76 @@ function barChartHtml(labels, values, maxVal){
   return '<div class="bar-chart-wrap">' + bars + '</div><div class="bar-chart-labels">' + lbls + '</div>';
 }
 
+/* ---- Pestaña Workspaces del grupo: vista de miembros / edición de membresía ---- */
+function renderWorkspacesTab(el){
+  var grupo = grupoWSState.activeGroup;
+  if (!grupoWSState.editingWorkspaces){
+    var miembros = groupMembership[grupo] || [];
+    var rows = masterWorkspaces.filter(function(w){ return miembros.indexOf(w.id) !== -1; }).map(function(w){
+      return '<tr><td class="desc-link">' + w.id + '</td><td>' + w.fqdn + '</td><td>' + w.ip + '</td><td>' + w.so + '</td><td>' + w.cpu + '</td><td>' + w.ram + '</td><td>' + w.tipo + '</td></tr>';
+    }).join('');
+    el.innerHTML = '<div class="toolbar" style="padding:0 0 10px;background:transparent;border:none;"><div class="btn-tool"><i class="ti ti-upload"></i> Importar Workspaces</div><div class="btn-tool" id="gws-editar-ws"><i class="ti ti-pencil"></i> Editar</div><div class="btn-tool"><i class="ti ti-file-export"></i> Exportar</div></div>' +
+      '<div class="table-wrap"><table><thead><tr><th>Nombre</th><th>FQDN</th><th>Dirección IP</th><th>Sistema operativo</th><th>Núcleos de CPU</th><th>RAM</th><th>Tipo</th></tr></thead><tbody>' + (rows || '') + '</tbody></table></div>';
+    var editBtn = document.getElementById('gws-editar-ws');
+    if (editBtn) editBtn.addEventListener('click', function(){
+      grupoWSState.editingWorkspaces = true;
+      grupoWSState.tempSelection = (groupMembership[grupo] || []).slice();
+      renderWorkspacesTab(el);
+    });
+  } else {
+    el.innerHTML = '<div class="toolbar" style="padding:0 0 10px;background:transparent;border:none;">' +
+      '<div class="btn-tool" id="gws-ws-cancelar"><i class="ti ti-x"></i> Cancelar</div>' +
+      '<div class="btn-tool" id="gws-ws-guardar"><i class="ti ti-device-floppy"></i> Guardar</div>' +
+      '<div class="btn-tool"><i class="ti ti-file-export"></i> Exportar</div>' +
+      '<div class="btn-tool"><i class="ti ti-refresh"></i> Recargar</div>' +
+      '<div style="flex:1"></div>' +
+      '<div class="search-box"><i class="ti ti-search"></i><input type="text" id="gws-ws-search" placeholder="Buscar por término..."></div>' +
+      '<div class="filter-chip">Mostrar todos los Workspaces: <b>Cualquiera</b></div>' +
+    '</div>' +
+    '<div class="table-wrap"><table><thead><tr><th></th><th>Nombre</th><th>FQDN</th><th>Dirección IP</th><th>Sistema operativo</th><th>Núcleos de CPU</th><th>RAM</th><th>Tipo</th><th>Último usuario</th></tr></thead><tbody id="gws-ws-edit-tbody"></tbody></table></div>';
+
+    renderWorkspacesEditRows('');
+    var searchInput = document.getElementById('gws-ws-search');
+    if (searchInput) searchInput.addEventListener('input', function(){ renderWorkspacesEditRows(searchInput.value); });
+
+    document.getElementById('gws-ws-cancelar').addEventListener('click', function(){
+      grupoWSState.editingWorkspaces = false;
+      renderWorkspacesTab(el);
+    });
+    document.getElementById('gws-ws-guardar').addEventListener('click', function(){
+      groupMembership[grupo] = grupoWSState.tempSelection.slice();
+      grupoWSState.editingWorkspaces = false;
+      renderWorkspacesTab(el);
+    });
+  }
+}
+
+function renderWorkspacesEditRows(filterText){
+  var tbody = document.getElementById('gws-ws-edit-tbody');
+  if (!tbody) return;
+  var q = (filterText || '').trim().toLowerCase();
+  var filtered = q === '' ? masterWorkspaces : masterWorkspaces.filter(function(w){ return w.id.toLowerCase().indexOf(q) !== -1; });
+  tbody.innerHTML = filtered.map(function(w){
+    var checked = grupoWSState.tempSelection.indexOf(w.id) !== -1;
+    return '<tr><td class="gws-check-cell" data-wsid="' + w.id + '" style="width:34px;text-align:center;cursor:pointer;padding:10px 0;"><i class="ti ' + (checked ? 'ti-circle-check-filled' : 'ti-circle') + '" style="color:' + (checked ? '#f5813e' : '#ccc') + ';font-size:19px;pointer-events:none;"></i></td>' +
+      '<td class="desc-link">' + w.id + '</td><td>' + w.fqdn + '</td><td>' + w.ip + '</td><td>' + w.so + '</td><td>' + w.cpu + '</td><td>' + w.ram + '</td><td>' + w.tipo + '</td><td>' + w.usuario + '</td></tr>';
+  }).join('');
+  tbody.querySelectorAll('.gws-check-cell').forEach(function(cell){
+    cell.addEventListener('click', function(){
+      var id = cell.dataset.wsid;
+      var idx = grupoWSState.tempSelection.indexOf(id);
+      if (idx === -1) grupoWSState.tempSelection.push(id);
+      else grupoWSState.tempSelection.splice(idx, 1);
+      renderWorkspacesEditRows(document.getElementById('gws-ws-search').value);
+    });
+  });
+}
+
 function pageGrupoWSDetail(){
+  var nombre = grupoWSState.activeGroup || '';
   return '<div class="page"><div class="page-header">' + enunciadoHtml() +
-    '<div class="breadcrumb"><a id="gws-back-1">Flexxible Training Site</a><i class="ti ti-chevron-right" style="font-size:11px;"></i><a id="gws-back-2">Grupos de Workspaces</a><i class="ti ti-chevron-right" style="font-size:11px;"></i><span style="color:#555;">Grupo sin seguridad</span></div>' +
-    '<div style="font-size:20px;font-weight:700;color:#1a1a1a;">Grupo sin seguridad</div>' +
+    '<div class="breadcrumb"><a id="gws-back-1">Flexxible Training Site</a><i class="ti ti-chevron-right" style="font-size:11px;"></i><a id="gws-back-2">Grupos de Workspaces</a><i class="ti ti-chevron-right" style="font-size:11px;"></i><span style="color:#555;">' + nombre + '</span></div>' +
+    '<div style="font-size:20px;font-weight:700;color:#1a1a1a;">' + nombre + '</div>' +
     '<div class="gws-tabs">' +
       '<div class="gws-tab" data-tab="detalles">Detalles del grupo de Workspaces</div>' +
       '<div class="gws-tab" data-tab="workspaces">Workspaces</div>' +
@@ -1067,30 +1200,28 @@ function wireGrupoWSTabs(){
 
 function renderGrupoWSTab(tab){
   grupoWSState.activeTab = tab;
+  if (tab !== 'workspaces') grupoWSState.editingWorkspaces = false;
   document.querySelectorAll('.gws-tab').forEach(function(t){ t.classList.toggle('active', t.dataset.tab === tab); });
   var el = document.getElementById('gws-tab-content');
   if (!el) return;
-  updateGlobalToken('page:grupowsdetail:' + tab);
+  var grupo = grupoWSState.activeGroup;
 
   if (tab === 'detalles'){
+    var miembros = (groupMembership[grupo] || []).length;
     el.innerHTML = '<div style="display:grid;grid-template-columns:2fr 1fr;gap:20px;">' +
       '<div class="gws-card">' +
-        '<div class="gws-field-label">Nombre</div><div class="gws-field-value">Grupo sin seguridad</div>' +
+        '<div class="gws-field-label">Nombre</div><div class="gws-field-value">' + grupo + '</div>' +
         '<div class="gws-field-label">Descripción</div><div class="gws-field-value">-</div>' +
         '<div class="gws-field-label">Tipo</div><div class="gws-field-value">Estático</div>' +
       '</div>' +
       '<div>' +
-        '<div class="gws-side-box"><i class="ti ti-stack"></i><div><div class="gws-side-label"># Workspaces</div><div class="gws-side-value">4</div></div></div>' +
+        '<div class="gws-side-box"><i class="ti ti-stack"></i><div><div class="gws-side-label"># Workspaces</div><div class="gws-side-value">' + miembros + '</div></div></div>' +
         '<div class="gws-side-box"><i class="ti ti-users"></i><div><div class="gws-side-label">Creado por</div><div class="gws-side-value">Joan Serra</div></div></div>' +
         '<div class="gws-side-box"><i class="ti ti-calendar"></i><div><div class="gws-side-label">Fecha de creación</div><div class="gws-side-value">21/8/26</div></div></div>' +
       '</div></div>';
   }
   else if (tab === 'workspaces'){
-    var rows = gwsWorkspaces.map(function(w){
-      return '<tr><td class="desc-link">' + w.nombre + '</td><td>' + w.fqdn + '</td><td>' + w.ip + '</td><td>' + w.so + '</td><td>' + w.cpu + '</td><td>' + w.ram + '</td><td>' + w.tipo + '</td></tr>';
-    }).join('');
-    el.innerHTML = '<div class="toolbar" style="padding:0 0 10px;background:transparent;border:none;"><div class="btn-tool"><i class="ti ti-upload"></i> Importar Workspaces</div><div class="btn-tool"><i class="ti ti-pencil"></i> Editar</div><div class="btn-tool"><i class="ti ti-file-export"></i> Exportar</div></div>' +
-      '<div class="table-wrap"><table><thead><tr><th>Nombre</th><th>FQDN</th><th>Dirección IP</th><th>Sistema operativo</th><th>Núcleos de CPU</th><th>RAM</th><th>Tipo</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+    renderWorkspacesTab(el);
   }
   else if (tab === 'historial'){
     var vals = [4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,0];
@@ -1120,12 +1251,14 @@ function renderGrupoWSTab(tab){
 }
 
 function renderProgramacionesTab(el){
+  var grupo = grupoWSState.activeGroup;
+  var lista = programacionesByGroup[grupo] || [];
   var toolbar = '<div class="toolbar" style="padding:0 0 10px;background:transparent;border:none;"><div class="btn-tool" id="gws-nuevo-prog"><i class="ti ti-plus"></i> Nuevo</div><div class="btn-tool"><i class="ti ti-file-export"></i> Exportar</div><div class="btn-tool"><i class="ti ti-refresh"></i> Recargar</div></div>';
   var body;
-  if (grupoWSState.programaciones.length === 0){
+  if (lista.length === 0){
     body = '<div class="gws-empty"><i class="ti ti-package"></i>No hay programaciones configuradas</div>';
   } else {
-    var rows = grupoWSState.programaciones.map(function(p){
+    var rows = lista.map(function(p){
       return '<tr><td class="desc-link">' + p.accionLabel + '</td><td>' + p.resumen + '</td><td>' + p.zonaLabel + '</td></tr>';
     }).join('');
     body = '<div class="table-wrap"><table><thead><tr><th>Acción</th><th>Programación</th><th>Zona horaria</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
@@ -1145,7 +1278,7 @@ function readPanelState(){
 }
 function updatePanelToken(){
   var s = readPanelState();
-  updateGlobalToken(progStateKey(s.accion, s.hora, s.dias, s.zona));
+  updateGlobalToken(progStateKey(grupoWSState.activeGroup, s.accion, s.hora, s.dias, s.zona));
 }
 
 function openSidePanel(){
@@ -1162,7 +1295,7 @@ function openSidePanel(){
 }
 function closeSidePanel(){
   document.getElementById('sp-overlay').classList.remove('open');
-  updateGlobalToken('page:grupowsdetail:programaciones');
+  refreshPageToken();
 }
 
 function submitProgramacion(){
@@ -1196,7 +1329,10 @@ function submitProgramacion(){
     : ('sólo ' + diasChecked.slice(0,-1).map(function(d){return d.toLowerCase();}).join(', ') + ' y ' + diasChecked[diasChecked.length-1].toLowerCase());
   var resumen = 'A las ' + hora + ', ' + diasTexto;
 
-  grupoWSState.programaciones.push({ accionLabel: accionLabel, resumen: resumen, zonaLabel: zonaLabel, accionValue: accionSel.value });
+  var entry = { accionLabel: accionLabel, resumen: resumen, zonaLabel: zonaLabel, accionValue: accionSel.value, horaRaw: hora, diasRaw: diasChecked.slice(), zonaValue: zonaSel.value };
+  var grupo = grupoWSState.activeGroup;
+  if (!programacionesByGroup[grupo]) programacionesByGroup[grupo] = [];
+  programacionesByGroup[grupo].push(entry);
 
   closeSidePanel();
   renderGrupoWSTab('programaciones');
@@ -1210,13 +1346,37 @@ document.getElementById('sp-hora').addEventListener('input', updatePanelToken);
 document.getElementById('sp-zona').addEventListener('change', updatePanelToken);
 document.querySelectorAll('.sp-day-item input').forEach(function(cb){ cb.addEventListener('change', updatePanelToken); });
 
+function copyTextRobust(text){
+  if (navigator.clipboard && navigator.clipboard.writeText && window.isSecureContext){
+    return navigator.clipboard.writeText(text);
+  }
+  return new Promise(function(resolve, reject){
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.top = '-1000px';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      var ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      if (ok) resolve(); else reject(new Error('execCommand copy failed'));
+    } catch (e) { reject(e); }
+  });
+}
+
 document.getElementById('global-token-copy').addEventListener('click', function(){
   var txt = document.getElementById('global-token-value').textContent;
-  navigator.clipboard.writeText(txt).then(function(){
-    var btn = document.getElementById('global-token-copy');
+  var btn = document.getElementById('global-token-copy');
+  copyTextRobust(txt).then(function(){
     btn.textContent = 'Copiado ✓';
     setTimeout(function(){ btn.textContent = 'Copiar'; }, 1200);
-  }).catch(function(){});
+  }).catch(function(){
+    btn.textContent = 'Selecciona y copia';
+    setTimeout(function(){ btn.textContent = 'Copiar'; }, 1800);
+  });
 });
 
 /* ===================== MICROSERVICIOS ===================== */
@@ -1810,6 +1970,13 @@ document.getElementById('sidebar-nav').addEventListener('click', function(e){
   }
   if (pageEl){ goPage(pageEl.dataset.page); }
 });
+
+var contentObserver = new MutationObserver(function(){
+  var panelOpen = document.getElementById('sp-overlay').classList.contains('open');
+  if (panelOpen) return; // mientras el panel está abierto, el token lo controla el estado de sus campos
+  refreshPageToken();
+});
+contentObserver.observe(document.getElementById('content-area'), { childList: true, subtree: true, characterData: true });
 
 goPage('inicio');
 </script>
