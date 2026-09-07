@@ -9,7 +9,7 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #1a1a1a; }
   .app { display: flex; flex-direction: column; height: 100vh; background: #1a1a1a; font-size: 13px; position: relative; overflow: hidden; }
-  .app-body { flex: 1; display: flex; overflow: hidden; }
+  .app-body { flex: 1; display: flex; overflow: hidden; padding-bottom: 42px; box-sizing: border-box; }
   .sidebar { width: 190px; background: #111; color: #ccc; display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; }
   .sidebar-logo { padding: 14px 16px; border-bottom: 0.5px solid #2a2a2a; display: flex; align-items: center; }
   .logo-text { font-size: 18px; font-weight: 700; color: #fff; letter-spacing: -0.5px; }
@@ -569,7 +569,17 @@ function goPage(page){
     wireWSDetail();
     renderWSDetailSection('general');
   }
-  else if (page === 'sesiones') area.innerHTML = pageSesiones();
+  else if (page === 'sesiones'){
+    area.innerHTML = pageSesiones();
+    renderSesiones();
+    var sesSearch = document.getElementById('ses-search');
+    if (sesSearch) sesSearch.addEventListener('input', function(){ renderSesiones(sesSearch.value); });
+  }
+  else if (page === 'sesiondetail'){
+    area.innerHTML = pageSesionDetail();
+    var sesBack = document.getElementById('ses-det-back');
+    if (sesBack) sesBack.addEventListener('click', function(){ goPage('sesiones'); });
+  }
   else if (page === 'gruposworkspaces'){
     area.innerHTML = pageGruposWorkspaces();
     renderGruposWS();
@@ -577,20 +587,62 @@ function goPage(page){
     if (gwsSearch) gwsSearch.addEventListener('input', function(){ renderGruposWS(gwsSearch.value); });
   }
   else if (page === 'grupowsdetail'){ area.innerHTML = pageGrupoWSDetail(); wireGrupoWSTabs(); renderGrupoWSTab('detalles'); }
-  else if (page === 'ubicaciones') area.innerHTML = pageUbicaciones();
+  else if (page === 'ubicaciones'){
+    area.innerHTML = pageUbicaciones();
+    var ubiRow = document.getElementById('ubi-terrassa-row');
+    if (ubiRow) ubiRow.addEventListener('click', function(){ goPage('ubicaciondetail'); });
+  }
+  else if (page === 'ubicaciondetail'){
+    area.innerHTML = pageUbicacionDetail();
+    wireUbicacionDetail();
+  }
   else if (page === 'redes') area.innerHTML = pageRedes();
-  else if (page === 'notificaciones') area.innerHTML = pageNotificaciones();
+  else if (page === 'notificaciones'){
+    area.innerHTML = pageNotificaciones();
+    var notifTbody = document.getElementById('notif-tbody');
+    if (notifTbody) notifTbody.querySelectorAll('tr[data-notif-msg]').forEach(function(tr){
+      tr.addEventListener('click', function(e){
+        if (e.target.type === 'checkbox') return;
+        notifDetailState.mensaje = tr.dataset.notifMsg;
+        goPage('notificaciondetail');
+      });
+    });
+  }
+  else if (page === 'notificaciondetail'){
+    area.innerHTML = pageNotificacionDetail();
+    wireNotificacionDetail();
+  }
   else if (page === 'redesinalambricas'){
     area.innerHTML = pageRedesInalambricas();
     renderRedesInalambricas();
     var wifiSearch = document.getElementById('wifi-search');
     if (wifiSearch) wifiSearch.addEventListener('input', function(){ renderRedesInalambricas(wifiSearch.value); });
   }
+  else if (page === 'wifidetail'){
+    area.innerHTML = pageWifiDetail();
+    wireWifiDetail();
+  }
   else if (page === 'actresumen') area.innerHTML = pageActResumen();
   else if (page === 'actgrupos') area.innerHTML = pageActGrupos();
   else if (page === 'actpatches') area.innerHTML = pageActPatches();
-  else if (page === 'actdirectivas') area.innerHTML = pageActDirectivas();
-  else if (page === 'actdestinatarios') area.innerHTML = pageActDestinatarios();
+  else if (page === 'actdirectivas'){
+    area.innerHTML = pageActDirectivas();
+    var dirRow = document.getElementById('directiva-parches-row');
+    if (dirRow) dirRow.addEventListener('click', function(){ goPage('actdirectivadetail'); });
+  }
+  else if (page === 'actdirectivadetail'){
+    area.innerHTML = pageActDirectivaDetail();
+    wireActDirectivaDetail();
+  }
+  else if (page === 'actdestinatarios'){
+    area.innerHTML = pageActDestinatarios();
+    var destRow = document.getElementById('dest-prueba-row');
+    if (destRow) destRow.addEventListener('click', function(){ goPage('actdestinatariodetail'); });
+  }
+  else if (page === 'actdestinatariodetail'){
+    area.innerHTML = pageActDestinatarioDetail();
+    wireActDestinatarioDetail();
+  }
   else if (page === 'softwareapps') area.innerHTML = pageSoftwareApps();
   else if (page === 'softwarelic') area.innerHTML = pageSoftwareLicencias();
   else if (page === 'softwaresam') area.innerHTML = pageSoftwareSAM();
@@ -932,7 +984,75 @@ var wsDetailData = {
       ["Npcap","Nmap Project","1.88","4/6/26, 13:36:17","C:\\Program Files\\Npcap"],
       ["uniFLOW Universal Driver","NT-ware","1.00.0000","28/5/26, 0:00:00","C:\\Program Files (x86)\\NT-ware\\uniFLOW Universal Driver"]
     ],
-    badges:{apps:11,alertas:0,operaciones:121,notificaciones:0,sesiones:0,servicios:233,discos:2,historialGrupos:8,eventosPnP:0,erroresPnP:0,historialVersiones:6,actInstaladas:82,actPendientes:2,gruposWS:7}
+    badges:{apps:11,alertas:0,operaciones:121,notificaciones:1,sesiones:1,servicios:233,discos:2,historialGrupos:8,eventosPnP:0,erroresPnP:0,historialVersiones:6,actInstaladas:82,actPendientes:2,gruposWS:7},
+    alertas: [],
+    notificaciones: [["Prueba de notificaciones persistentes","Informativo","Workspaces","(UTC+01:00) Brussels, Co...","7/9/26, 18:06:00","7/9/26, 19:06:00"]],
+    operacionesRows: [
+      ["Generate Notifications - Target: Workspace - Total created notifications: 1","Enviar notificación","Finalizado","jserra@flexxible.com","7/9/26, 18:06:54","7/9/26, 18:06:55"],
+      ["Microservice on DESKTOP-DEFE7N5 (Network data usage) requested by 'Automatic alert trigger'","Ejecución de microservicios","Finalizado","Automatic alert trigger","7/9/26, 13:39:13","7/9/26, 13:39:27"],
+      ["Request Remote Assistance session for user 'DESKTOP-DEFE7N5\\Training' on VM 'DESKTOP-DEFE7N5'","Asistencia remota","Error","jserra@flexxible.com","7/9/26, 13:30:43","7/9/26, 13:33:19"],
+      ["Request Remote Assistance session for user 'DESKTOP-DEFE7N5\\Training' on VM 'DESKTOP-DEFE7N5'","Asistencia remota","Error","jserra@flexxible.com","7/9/26, 13:28:03","7/9/26, 13:30:43"]
+    ],
+    sesiones: [["DESKTOP-DEFE7N5\\Training","Device","2","Active","7/9/26, 18:05:12","0%","0,00 GB"]],
+    servicios: [
+      ["Local Session Manager","Running","Auto","LocalSystem"],
+      ["Windows Image Acquisition (WIA)","Running","Auto","NT Authority\\LocalService"],
+      ["User Profile Service","Running","Auto","LocalSystem"],
+      ["Microsoft Office Click-to-Run Service","Running","Auto","LocalSystem"],
+      ["Shell Hardware Detection","Running","Auto","LocalSystem"],
+      ["Power","Running","Auto","LocalSystem"],
+      ["Base Filtering Engine","Running","Auto","NT AUTHORITY\\LocalServi..."],
+      ["System Event Notification Service","Running","Auto","LocalSystem"],
+      ["Security Center","Stopped","Auto","NT AUTHORITY\\LocalServi..."],
+      ["Connected Devices Platform Service","Stopped","Auto","NT AUTHORITY\\LocalServi..."],
+      ["Cryptographic Services","Running","Auto","NT Authority\\NetworkSer..."],
+      ["Windows Media Player Network Sharing Service","Stopped","Auto","NT AUTHORITY\\NetworkS..."],
+      ["Remote Access Connection Manager","Running","Auto","localSystem"],
+      ["Windows Audio","Running","Auto","NT AUTHORITY\\LocalServi..."]
+    ],
+    discos: [
+      ["\\\\.\\PHYSICALDRIVE0","-","N/A","N/A","-","100 MB","-"],
+      ["\\\\.\\PHYSICALDRIVE0","C:","No cifrado","None","-","126.89 GB","33 GB"]
+    ],
+    histGrupos: [
+      ["RP Training","RP Training 2","Manual","30/12/25, 11:36:48"],
+      ["RP Training 2","RP Training","Manual","30/12/25, 14:58:26"],
+      ["OSM_ENTraining","RP Training","Manual","29/1/26, 13:14:00"],
+      ["Gsanitari","RP Training","Manual","12/2/26, 11:00:57"],
+      ["Gsanitari","RP Training","Manual","27/2/26, 8:49:56"],
+      ["Gsanitari","RP Training","Manual","27/2/26, 9:04:15"],
+      ["Gsanitari","RP Training","Manual","27/2/26, 9:05:46"],
+      ["prueba12","RP Training","Manual","13/4/26, 15:39:57"]
+    ],
+    histVersiones: [
+      ["25.9.1.1","20/10/25, 0:55:23"],["25.9.1.2","29/10/25, 8:35:12"],["25.10.1.3","19/11/25, 8:41:03"],
+      ["25.12.1.0","22/1/26, 10:52:45"],["26.2.1.0","13/3/26, 8:46:59"],["26.4.1.0","8/5/26, 11:03:06"]
+    ],
+    histArranque: [
+      ["7 sept 2026, 18:04:46",19],["7 sept 2026, 13:19:19",34],["4 sept 2026, 11:55:45",6],["4 sept 2026, 10:39:15",7],
+      ["4 sept 2026, 9:36:54",14],["1 sept 2026, 10:50:39",32],["1 sept 2026, 9:50:06",6],["27 ago 2026, 8:54:20",9],
+      ["26 ago 2026, 14:22:24",6],["25 ago 2026, 10:58:44",6]
+    ],
+    actInstaladas: [
+      ["4/6/26, 13:41:21","2267602","Security Intelligence Upda...","Microsoft Defender Antivirus","Unspecified","5/6/26, 22:22:07","Definition Updates"],
+      ["4/6/26, 8:11:33","2267602","Security Intelligence Upda...","Microsoft Defender Antivirus","Unspecified","5/6/26, 22:20:45","Definition Updates"],
+      ["3/6/26, 15:43:18","2267602","Security Intelligence Upda...","Microsoft Defender Antivirus","Unspecified","4/6/26, 22:21:55","Definition Updates"],
+      ["2/6/26, 13:39:20","2267602","Security Intelligence Upda...","Microsoft Defender Antivirus","Unspecified","3/6/26, 22:20:50","Definition Updates"],
+      ["28/5/26, 13:13:26","2267602","Security Intelligence Upda...","Microsoft Defender Antivirus","Unspecified","29/5/26, 22:23:40","Definition Updates"],
+      ["28/5/26, 10:57:05","2267602","Security Intelligence Upda...","Microsoft Defender Antivirus","Unspecified","29/5/26, 22:23:08","Definition Updates"],
+      ["27/5/26, 14:29:48","2267602","Security Intelligence Upda...","Microsoft Defender Antivirus","Unspecified","28/5/26, 22:22:47","Definition Updates"],
+      ["27/5/26, 10:37:49","2267602","Security Intelligence Upda...","Microsoft Defender Antivirus","Unspecified","28/5/26, 22:22:19","Definition Updates"],
+      ["26/5/26, 11:09:52","2267602","Security Intelligence Upda...","Microsoft Defender Antivirus","Unspecified","27/5/26, 22:20:38","Definition Updates"],
+      ["22/5/26, 10:18:11","2267602","Security Intelligence Upda...","Microsoft Defender Antivirus","Unspecified","23/5/26, 22:22:39","Definition Updates"],
+      ["21/5/26, 11:42:45","4052623","Update for Microsoft Def...","Microsoft Defender Antivirus","Unspecified","20/5/26, 22:19:55","Definition Updates"],
+      ["21/5/26, 11:42:45","2267602","Security Intelligence Upda...","Microsoft Defender Antivirus","Unspecified","22/5/26, 22:21:10","Definition Updates"],
+      ["20/5/26, 15:16:06","2267602","Security Intelligence Upda...","Microsoft Defender Antivirus","Unspecified","21/5/26, 22:22:28","Definition Updates"],
+      ["18/5/26, 10:16:38","890830","Windows Malicious Softw...","Windows Server, version 1903 an...","Unspecified","12/5/26, 22:26:40","Update Rollups"]
+    ],
+    actPendientes: [
+      ["5039211","2024-06 Cumulative Update for Windows 10 Version 21H2 for x64-based Systems (KB5039211)","-","-","-","Security Updates"],
+      ["2267602","Security Intelligence Update for Microsoft Defender Antivirus - KB2267602 (Version 1.451.275.0) - ...","Microsoft Defender Antivi...","Unspecified","6/6/26, 22:19:52","Definition Updates"]
+    ]
   }
 };
 
@@ -977,7 +1097,7 @@ function generateDeviceData(id){
   var fabricante = esVirtual ? 'Microsoft Corporation' : pick(['Dell Inc.','HP','Lenovo']);
   var modelo = esVirtual ? 'Virtual Machine' : pick(['OptiPlex 7090','ProDesk 600 G6','ThinkCentre M720']);
 
-  return {
+  var data = {
     estado: base.estado || 'Desconectado', so: so, tipo: tipo, ultimoUsuario: usuario, conexion: base.conex || pick(['Ethernet','Wifi']),
     ip: ip, flexxVersion: pick(['26.6.1.5','26.5.0.2','26.6.0.9']), flexxUltimo: '4/9/26, ' + pick(['08:10','10:25','14:33']),
     general: { Nombre: id, Dominio: '-', OU: '-', 'Tiempo de conexión': '4/9/26, 0' + pick([7,8,9]) + ':' + pick(['12','45','03']) + ':00',
@@ -1017,10 +1137,60 @@ function generateDeviceData(id){
       'FlexxAgent Proxy Url': 'Not configured', 'Device Model': modelo, 'Processor Model': procesador, 'Antivirus Product': 'Windows Defender',
       MonitorSerial: pick(['Not Detected','SN-2231XZ']) },
     apps: pickApps(pick([4,5,6,7])),
-    badges: { apps: pick([5,8,11,14]), alertas: pick([0,0,1,2]), operaciones: pick([20,50,90,150]), notificaciones: 0, sesiones: pick([0,1]),
-      servicios: pick([180,210,233]), discos: pick([1,2]), historialGrupos: pick([2,5,8]), eventosPnP: 0, erroresPnP: 0,
-      historialVersiones: pick([1,3,6]), actInstaladas: pick([40,60,82]), actPendientes: pick([0,1,2,3]), gruposWS: pick([1,3,7]) }
+
+    alertas: (function(){
+      var pool = [
+        ['Warning','Workspace with Plug and Play errors','Workspace with 1 Plug and play errors','17/3/26, 6:34:11','17/3/26, 6:37:26'],
+        ['Informational','Workspace uptime','Uptime ' + pick([12,26,40]) + ' days', '7/9/26, 11:34:16','-']
+      ];
+      return pool.slice(0, pick([0,0,1,2]));
+    })(),
+    notificaciones: bool() ? [['Recordatorio de mantenimiento','Informativo','Workspaces','(UTC+01:00) Madrid','4/9/26, 09:00:00','4/9/26, 10:00:00']] : [],
+    operacionesRows: [
+      ["Microservice on " + id + " (Network data usage) requested by 'Automatic alert trigger'","Ejecución de microservicios","Finalizado","Automatic alert trigger","3/9/26, 10:0" + pick([1,3,5]) + ":00","3/9/26, 10:0" + pick([2,4,6]) + ":00"],
+      ["Generate Notifications - Target: Workspace - Total created notifications: 1","Enviar notificación","Finalizado","jserra@flexxible.com","2/9/26, 09:1" + pick([0,5]) + ":00","2/9/26, 09:1" + pick([1,6]) + ":00"]
+    ].slice(0, pick([1,2])),
+    sesiones: bool() ? [[id + '\\Usuario','Device', String(pick([1,2,3])),'Active','3/9/26, 1' + pick([0,4,8]) + ':00:00', pct(), (Math.round(rnd()*4*100)/100) + ' GB']] : [],
+    servicios: wsDetailData["DESKTOP-DEFE7N5"].servicios,
+    discos: (function(){
+      var totalGB = pick([120,256,512]);
+      var usadoGB = Math.round(totalGB * rnd());
+      return [
+        ["\\\\.\\PHYSICALDRIVE0","-","N/A","N/A","-","100 MB","-"],
+        ["\\\\.\\PHYSICALDRIVE0","C:", bool() ? 'Cifrado' : 'No cifrado','None','-', totalGB + ' GB', usadoGB + ' GB']
+      ];
+    })(),
+    histGrupos: [
+      ['RP Training','RP Training 2','Manual','1' + pick([0,5]) + '/' + pick([2,6]) + '/26, 1' + pick([0,4]) + ':00:00'],
+      ['Gsanitari','RP Training','Manual','2' + pick([1,7]) + '/' + pick([3,8]) + '/26, 0' + pick([8,9]) + ':00:00']
+    ].slice(0, pick([0,1,2])),
+    histVersiones: wsDetailData["DESKTOP-DEFE7N5"].histVersiones,
+    histArranque: (function(){
+      var out = [];
+      var n = pick([4,6,8]);
+      for (var hi = 0; hi < n; hi++){
+        out.push(['0' + pick([1,4,7]) + ' sept 2026, ' + pick(['08:1','12:4','18:0']) + '0:00', pick([5,8,12,20,28])]);
+      }
+      return out;
+    })(),
+    actInstaladas: wsDetailData["DESKTOP-DEFE7N5"].actInstaladas,
+    actPendientes: [
+      ['5039211','2024-06 Cumulative Update for Windows 10 Version 21H2 for x64-based Systems (KB5039211)','-','-','-','Security Updates'],
+      ['2267602','Security Intelligence Update for Microsoft Defender Antivirus - KB2267602','Microsoft Defender Antivirus','Unspecified','6/6/26, 22:19:52','Definition Updates']
+    ].slice(0, pick([0,1,2])),
+    badges: { apps: pick([4,5,6,7]), alertas: 0, operaciones: pick([20,50,90,150]), notificaciones: 0, sesiones: 0,
+      servicios: 233, discos: 2, historialGrupos: 0, eventosPnP: 0, erroresPnP: 0,
+      historialVersiones: 6, actInstaladas: 82, actPendientes: 0, gruposWS: 0 }
   };
+  data.badges.apps = data.apps.length;
+  data.badges.alertas = data.alertas.length;
+  data.badges.notificaciones = data.notificaciones.length;
+  data.badges.operaciones = data.operacionesRows.length;
+  data.badges.sesiones = data.sesiones.length;
+  data.badges.discos = data.discos.length;
+  data.badges.historialGrupos = data.histGrupos.length;
+  data.badges.actPendientes = data.actPendientes.length;
+  return data;
 }
 
 function getDeviceDetailData(id){
@@ -1102,7 +1272,7 @@ function wsDetailSidebarHtml(activeSection){
     flatItem('histarranque','Historial de arranque', null) +
     flatItem('actinstaladasws','Actualizaciones instaladas', b.actInstaladas) +
     flatItem('actpendientesws','Actualizaciones pendientes', b.actPendientes) +
-    flatItem('gruposws2','Grupos de Workspaces', b.gruposWS);
+    flatItem('gruposws2','Grupos de Workspaces', deviceGroupsList(wsDetailState.deviceId).length);
 }
 
 function wireWSDetailSidebarClicks(){
@@ -1144,14 +1314,120 @@ function diagnosticoHtml(d){
 }
 
 function wsAppsInstaladasHtml(d){
-  var rows = d.apps.map(function(a){
-    return '<tr><td class="desc-link">' + a[0] + '</td><td>' + a[1] + '</td><td>' + a[2] + '</td><td>' + a[3] + '</td><td>' + a[4] + '</td></tr>';
-  }).join('');
   return '<div class="toolbar" style="padding:0 0 10px;background:transparent;border:none;"><div class="btn-tool"><i class="ti ti-file-export"></i> Exportar</div><div class="btn-tool"><i class="ti ti-refresh"></i> Recargar</div></div>' +
-    '<div class="search-box" style="max-width:280px;margin-bottom:10px;"><i class="ti ti-search"></i><input placeholder="Buscar por término..."></div>' +
-    '<div class="table-wrap"><table><thead><tr><th>Nombre</th><th>Editor</th><th>Versión</th><th>Instalado a la...</th><th>Ubicación de instalación</th></tr></thead><tbody>' +
-    (rows || '<tr><td colspan="5" style="color:#999;">Sin aplicaciones registradas</td></tr>') + '</tbody></table></div>' +
-    '<div style="padding:8px 0;font-size:11px;color:#888;">Página 1 de 1 · Mostrando 1 a ' + d.apps.length + ' de ' + d.apps.length + ' resultados</div>';
+    '<div class="search-box" id="wsapp-search-box" style="max-width:260px;margin-bottom:10px;flex:none;align-self:flex-start;"><i class="ti ti-search"></i><input type="text" id="wsapp-search" placeholder="Buscar por término..."></div>' +
+    '<div class="table-wrap"><table><thead><tr><th>Nombre</th><th>Editor</th><th>Versión</th><th>Instalado a la...</th><th>Ubicación de instalación</th></tr></thead><tbody id="wsapp-tbody"></tbody></table></div>' +
+    '<div style="padding:8px 0;font-size:11px;color:#888;" id="wsapp-count"></div>';
+}
+
+function renderWsAppRows(apps, filterText){
+  var tbody = document.getElementById('wsapp-tbody');
+  if (!tbody) return;
+  var q = (filterText || '').trim().toLowerCase();
+  var filtered = q === '' ? apps : apps.filter(function(a){
+    return a[0].toLowerCase().indexOf(q) !== -1 || a[1].toLowerCase().indexOf(q) !== -1;
+  });
+  tbody.innerHTML = filtered.map(function(a){
+    return '<tr><td class="desc-link">' + a[0] + '</td><td>' + a[1] + '</td><td>' + a[2] + '</td><td>' + a[3] + '</td><td>' + a[4] + '</td></tr>';
+  }).join('') || '<tr><td colspan="5" style="color:#999;">Sin resultados</td></tr>';
+  var countEl = document.getElementById('wsapp-count');
+  if (countEl) countEl.textContent = 'Página 1 de 1 · Mostrando 1 a ' + filtered.length + ' de ' + apps.length + ' resultados';
+}
+
+function simpleSectionHtml(headers, rows, emptyMsg, countLabel){
+  var head = headers.map(function(h){ return '<th>' + h + '</th>'; }).join('');
+  var body = rows.length
+    ? rows.map(function(r){ return '<tr>' + r.map(function(c){ return '<td>' + c + '</td>'; }).join('') + '</tr>'; }).join('')
+    : '<tr><td colspan="' + headers.length + '" style="color:#999;">' + emptyMsg + '</td></tr>';
+  return '<div class="toolbar" style="padding:0 0 10px;background:transparent;border:none;"><div class="btn-tool"><i class="ti ti-file-export"></i> Exportar</div><div class="btn-tool"><i class="ti ti-refresh"></i> Recargar</div></div>' +
+    '<div class="table-wrap"><table><thead><tr>' + head + '</tr></thead><tbody>' + body + '</tbody></table></div>' +
+    '<div style="padding:8px 0;font-size:11px;color:#888;">' + (countLabel || ('Mostrando ' + rows.length + ' de ' + rows.length + ' resultados')) + '</div>';
+}
+
+function wsAlertasHtml(d){
+  var rows = (d.alertas || []).map(function(a){
+    var cls = a[0] === 'Warning' ? 'status-warn' : 'status-ok';
+    return ['<span class="' + cls + '">' + a[0] + '</span>', '<span class="desc-link">' + a[1] + '</span>', a[2], a[3], a[4]];
+  });
+  return simpleSectionHtml(['Gravedad','Nombre de la alerta','Información','Fecha de inicio','Fecha de notificación'], rows, 'Sin alertas activas');
+}
+
+function wsNotificacionesHtml(d){
+  return simpleSectionHtml(['Mensaje','Gravedad','Destino','Zona horaria','Fecha de inicio','Fecha de finalización'], d.notificaciones || [], 'Sin notificaciones');
+}
+
+function wsOperacionesHtml(d){
+  var rows = (d.operacionesRows || []).map(function(o){
+    var cls = o[2] === 'Error' ? 'status-err' : 'status-ok';
+    return ['<span class="desc-link">' + o[0] + '</span>', o[1], '<span class="' + cls + '">' + o[2] + '</span>', o[3], o[4], o[5]];
+  });
+  return simpleSectionHtml(['Descripción','Tipo de operación','Estado','Iniciado por','Iniciado el','Finalizado el'], rows, 'Sin operaciones registradas');
+}
+
+function wsSesionesHtml(d){
+  var rows = (d.sesiones || []).map(function(s){
+    return ['<span class="desc-link">' + s[0] + '</span>', s[1], s[2], '<span class="status-ok">' + s[3] + '</span>', s[4], s[5], s[6]];
+  });
+  return simpleSectionHtml(['Usuario','Tipo de sesión','ID de sesión','Estado de conexión','Fecha de inicio','Uso de CPU','Uso de RAM'], rows, 'Sin sesiones activas');
+}
+
+function wsServiciosHtml(d){
+  var rows = (d.servicios || []).map(function(s){
+    var cls = s[1] === 'Running' ? 'status-ok' : 'status-warn';
+    return ['<span class="desc-link">' + s[0] + '</span>', '<span class="' + cls + '">' + s[1] + '</span>', s[2], s[3]];
+  });
+  var total = (d.badges && d.badges.servicios) || rows.length;
+  return simpleSectionHtml(['Nombre para mostrar','Estado','Tipo de inicio','Iniciar sesión como'], rows, 'Sin servicios',
+    'Página 1 de ' + Math.max(1, Math.ceil(total/50)) + ' · Mostrando 1 a ' + rows.length + ' de ' + total + ' resultados');
+}
+
+function wsDiscosHtml(d){
+  return simpleSectionHtml(['ID de dispositivo','Nombre','Disco duro encriptado','Método de cifrado','Etiqueta de volumen','Tamaño total','Tamaño usado'], d.discos || [], 'Sin discos detectados');
+}
+
+function wsHistGruposHtml(d){
+  return simpleSectionHtml(['Origen','Destino','Tipo de asignación','Fecha solicitada'], d.histGrupos || [], 'Sin historial de grupos de reporte');
+}
+
+function wsHistVersionesHtml(d){
+  return simpleSectionHtml(['Versión','Descubierto en'], d.histVersiones || [], 'Sin historial de versiones');
+}
+
+function wsHistArranqueHtml(d){
+  var data = d.histArranque || [];
+  var maxVal = Math.max.apply(null, data.map(function(x){ return x[1]; }).concat([1]));
+  var bars = data.map(function(x){
+    var pct = (x[1] / maxVal) * 100;
+    return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">' +
+      '<div style="width:150px;font-size:11px;color:#666;text-align:right;">' + x[0] + '</div>' +
+      '<div style="flex:1;background:#f0efe8;border-radius:3px;height:16px;"><div style="width:' + pct + '%;background:#f0b429;height:100%;border-radius:3px;"></div></div>' +
+      '<div style="width:30px;font-size:11px;color:#666;">' + x[1] + '</div>' +
+    '</div>';
+  }).join('');
+  return '<div class="gws-card">' + (bars || '<div style="color:#999;">Sin historial de arranque</div>') + '</div>';
+}
+
+function wsActInstaladasHtml(d){
+  var rows = d.actInstaladas || [];
+  var total = (d.badges && d.badges.actInstaladas) || rows.length;
+  return '<div style="font-size:12px;color:#666;margin-bottom:10px;">La vista actual muestra actualizaciones instaladas en el workspace durante los últimos 3 meses.</div>' +
+    simpleSectionHtml(['Fecha de instalación','KB','Título','Producto','Gravedad','Fecha de llegada','Categoría'], rows, 'Sin actualizaciones instaladas',
+      'Página 1 de ' + Math.max(1, Math.ceil(total/50)) + ' · Mostrando 1 a ' + Math.min(rows.length,50) + ' de ' + total + ' resultados');
+}
+
+function wsActPendientesHtml(d){
+  return '<div style="font-size:12px;color:#666;margin-bottom:10px;">La vista actual muestra actualizaciones pendientes de instalación en el workspace.</div>' +
+    simpleSectionHtml(['KB','Título','Producto','Gravedad','Fecha de llegada','Categoría'], d.actPendientes || [], 'Sin actualizaciones pendientes');
+}
+
+function deviceGroupsList(id){
+  return gruposWSGroups.filter(function(g){ return (groupMembership[g.name] || []).indexOf(id) !== -1; });
+}
+
+function wsGruposWSHtml(id){
+  var groups = deviceGroupsList(id);
+  var rows = groups.map(function(g){ return ['<span class="desc-link">' + g.name + '</span>', '-', g.tipo, String((groupMembership[g.name] || []).length)]; });
+  return simpleSectionHtml(['Nombre','Descripción','Tipo','Workspaces'], rows, 'Este dispositivo no pertenece a ningún grupo de workspaces');
 }
 
 function renderWSDetailSection(section){
@@ -1172,19 +1448,150 @@ function renderWSDetailSection(section){
     if (anchor2) anchor2.scrollIntoView({ block: 'start' });
   } else if (section === 'appsinstaladas'){
     content.innerHTML = wsAppsInstaladasHtml(d);
+    renderWsAppRows(d.apps, '');
+    var wsAppSearch = document.getElementById('wsapp-search');
+    if (wsAppSearch) wsAppSearch.addEventListener('input', function(){ renderWsAppRows(d.apps, wsAppSearch.value); });
+  } else if (section === 'alertasactivas'){
+    content.innerHTML = wsAlertasHtml(d);
+  } else if (section === 'notificacionesws'){
+    content.innerHTML = wsNotificacionesHtml(d);
+  } else if (section === 'operacionesws'){
+    content.innerHTML = wsOperacionesHtml(d);
+  } else if (section === 'sesionesws'){
+    content.innerHTML = wsSesionesHtml(d);
+  } else if (section === 'serviciosws'){
+    content.innerHTML = wsServiciosHtml(d);
+  } else if (section === 'discosws'){
+    content.innerHTML = wsDiscosHtml(d);
+  } else if (section === 'histgrupos'){
+    content.innerHTML = wsHistGruposHtml(d);
+  } else if (section === 'histversiones'){
+    content.innerHTML = wsHistVersionesHtml(d);
+  } else if (section === 'histarranque'){
+    content.innerHTML = wsHistArranqueHtml(d);
+  } else if (section === 'actinstaladasws'){
+    content.innerHTML = wsActInstaladasHtml(d);
+  } else if (section === 'actpendientesws'){
+    content.innerHTML = wsActPendientesHtml(d);
+  } else if (section === 'gruposws2'){
+    content.innerHTML = wsGruposWSHtml(wsDetailState.deviceId);
   } else {
     content.innerHTML = '<div class="gws-empty"><i class="ti ti-package"></i>Sección en construcción</div>';
   }
 }
 
 
+var sesionesRows = [
+  {usuario:"DESKTOP-DEFE7N5\\Training",workspace:"DESKTOP-DEFE7N5",tipo:"Device",idSesion:"2",estado:"Active",fechaInicio:"7/9/26, 18:05:12",cpu:"0%",ram:"0,12 GB"},
+  {usuario:"DESKTOP-T5EH32O\\Xavi",workspace:"DESKTOP-T5EH32O",tipo:"Device",idSesion:"1",estado:"Active",fechaInicio:"7/9/26, 18:09:08",cpu:"1%",ram:"0,57 GB"}
+];
+
 function pageSesiones(){
-  return '<div class="page"><div class="page-header">' + enunciadoHtml() + '<div style="font-size:18px;font-weight:600;color:#1a1a1a;margin-bottom:8px;">Sesiones</div></div>' +
-  '<div class="toolbar"><div class="btn-tool"><i class="ti ti-file-export"></i> Exportar</div><div style="flex:1"></div><div class="search-box"><i class="ti ti-search"></i><input placeholder="Buscar por término..."></div></div>' +
-  '<div class="table-wrap"><table><thead><tr><th>Usuario</th><th>Workspace</th><th>Inicio de sesión</th><th>Estado</th></tr></thead><tbody>' +
-  '<tr><td class="desc-link">jserra@flexxible.com</td><td>DESKTOP-DEFE7N5</td><td>1/9/26, 08:12:03</td><td class="status-ok">Activa</td></tr>' +
-  '<tr><td class="desc-link">Training</td><td>5CD54685XF</td><td>31/8/26, 17:40:22</td><td class="status-warn">Inactiva</td></tr>' +
-  '</tbody></table></div></div>';
+  return '<div class="page"><div class="page-header">' + enunciadoHtml() +
+    '<div style="font-size:18px;font-weight:600;color:#1a1a1a;margin-bottom:8px;"><i class="ti ti-users" style="color:#f5813e;"></i> Flexxible Training Site - Sesiones</div>' +
+  '</div>' +
+  '<div class="toolbar"><div class="btn-tool"><i class="ti ti-device-desktop"></i> Asistencia remota</div><div class="btn-tool"><i class="ti ti-file-export"></i> Exportar</div><div class="btn-tool"><i class="ti ti-refresh"></i> Recargar</div><div style="flex:1"></div>' +
+  '<div class="search-box" style="flex:none;align-self:center;"><i class="ti ti-search"></i><input type="text" id="ses-search" placeholder="Buscar por término..."></div>' +
+  '<div class="filter-chip">Grupos de workspaces: <b>Cualquiera</b></div></div>' +
+  '<div class="table-wrap"><table><thead><tr><th style="width:32px;"><input type="checkbox" class="gws-ws-checkbox"></th><th>Usuario</th><th>Workspace</th><th>Tipo de sesión</th><th>ID de sesión</th><th>Estado de con...</th><th>Fecha de inicio</th><th>Uso de CPU</th><th>Uso de RAM (...)</th></tr></thead><tbody id="ses-tbody"></tbody></table></div>' +
+  '<div class="pager"><span></span><span id="ses-count">Página 1 de 1 · 1 a 2 de 2 resultados</span><span style="font-size:11px;color:#aaa;">Tamaño de página: 50</span></div></div>';
+}
+
+function renderSesiones(filterText){
+  var tbody = document.getElementById('ses-tbody');
+  if (!tbody) return;
+  var q = (filterText || '').trim().toLowerCase();
+  var filtered = q === '' ? sesionesRows : sesionesRows.filter(function(r){
+    return r.usuario.toLowerCase().indexOf(q) !== -1 || r.workspace.toLowerCase().indexOf(q) !== -1 || r.estado.toLowerCase().indexOf(q) !== -1;
+  });
+  tbody.innerHTML = filtered.map(function(r){
+    return '<tr class="clickable" data-ses-user="' + r.usuario + '" data-ses-ws="' + r.workspace + '">' +
+      '<td style="width:32px;"><input type="checkbox" class="gws-ws-checkbox"></td>' +
+      '<td><span class="desc-link">' +
+        '<i class="ti ti-brand-windows" style="color:#0078d4;font-size:13px;margin-right:3px;"></i>' +
+        '<i class="ti ti-cloud" style="color:#888;font-size:13px;margin-right:3px;"></i>' +
+        r.usuario + '</span></td>' +
+      '<td>' + r.workspace + '</td>' +
+      '<td>' + r.tipo + '</td>' +
+      '<td>' + r.idSesion + '</td>' +
+      '<td class="status-ok">' + r.estado + '</td>' +
+      '<td>' + r.fechaInicio + '</td>' +
+      '<td>' + r.cpu + '</td>' +
+      '<td>' + r.ram + '</td>' +
+    '</tr>';
+  }).join('');
+  tbody.querySelectorAll('tr[data-ses-user]').forEach(function(tr){
+    tr.addEventListener('click', function(e){
+      if (e.target.type === 'checkbox') return;
+      sesionDetailState.usuario = tr.dataset.sesUser;
+      sesionDetailState.workspace = tr.dataset.sesWs;
+      goPage('sesiondetail');
+    });
+  });
+  var countEl = document.getElementById('ses-count');
+  if (countEl) countEl.textContent = q === ''
+    ? 'Página 1 de 1 · 1 a 2 de 2 resultados'
+    : filtered.length + ' resultado' + (filtered.length === 1 ? '' : 's') + ' para "' + filterText.trim() + '"';
+}
+
+var sesionDetailState = { usuario: '', workspace: '' };
+
+function pageSesionDetail(){
+  var u = sesionDetailState.usuario || 'DESKTOP-DEFE7N5\\Training';
+  var ws = sesionDetailState.workspace || 'DESKTOP-DEFE7N5';
+  var row = sesionesRows.filter(function(r){ return r.usuario === u && r.workspace === ws; })[0] || sesionesRows[0];
+  var d = getDeviceDetailData(ws);
+
+  var cards = [
+    {icon:'ti-user',label:'Usuario',value:'<span style="color:#2563eb;">' + row.usuario + '</span>'},
+    {icon:'ti-device-desktop',label:'Workspace',value:'<span style="color:#2563eb;">' + row.workspace + '</span> <i class="ti ti-external-link" style="font-size:11px;color:#999;"></i>'},
+    {icon:'ti-device-desktop',label:'Estado del Workspace',value:'<span class="status-ok">Conectado</span>'},
+    {icon:'ti-key',label:'Tipo de sesión',value:row.tipo},
+    {icon:'ti-calendar',label:'Fecha de inicio',value:row.fechaInicio},
+    {icon:'ti-map-pin',label:'Conectado desde',value:'PC-JSERRA'},
+    {icon:'ti-plug',label:'Conectado',value:'Sí'},
+    {icon:'ti-cloud',label:'Tipo de dispositivo',value:'<span style="text-transform:uppercase;">VIRTUAL</span>'},
+    {icon:'ti-chart-bar',label:'Session Analyzer',value:'Sí'}
+  ];
+  var cardsHtml = cards.map(function(c){
+    return '<div style="background:#fff;border:0.5px solid #e0dfd8;border-radius:8px;padding:14px 16px;display:flex;align-items:flex-start;gap:10px;">' +
+      '<i class="ti ' + c.icon + '" style="font-size:18px;color:#888;flex-shrink:0;margin-top:2px;"></i>' +
+      '<div><div class="gws-field-label">' + c.label + '</div><div style="font-size:13px;color:#222;font-weight:500;">' + c.value + '</div></div></div>';
+  }).join('');
+
+  var fields = [
+    {k:'Nombre',v:'<span style="color:#2563eb;">' + ws + '</span>'},
+    {k:'SO',v:d.so},
+    {k:'Tipo',v:d.tipo},
+    {k:'Conexión',v:d.conexion},
+    {k:'Dirección IP',v:d.ip},
+    {k:'FlexxAgent Versión',v:d.flexxVersion},
+    {k:'FlexxAgent Último informe',v:'7/9/26, 18:22:00'},
+    {k:'Dominio',v:'-'},
+    {k:'OU',v:'-'},
+    {k:'Tiempo de conexión',v:row.fechaInicio},
+    {k:'Último usuario',v:row.usuario},
+    {k:'Utilización actual de la CPU',v:'9%'},
+    {k:'Utilización actual de la RAM',v:'1,72 GB (73%)'},
+    {k:'Código',v:'-'},
+    {k:'Descripción',v:'-'},
+    {k:'Tiempo de actividad',v:'0d 0h 22m 17s'},
+    {k:'Tiempo de inactividad',v:'0d 0h 0m 0s'},
+    {k:'Último reinicio',v:'7/9/26, 18:04:46'}
+  ];
+  var fieldsHtml = fields.map(function(f){
+    return '<div><div class="gws-field-label">' + f.k + '</div><div class="gws-field-value" style="margin-bottom:0;">' + f.v + '</div></div>';
+  }).join('');
+
+  return '<div class="page"><div class="page-header">' + enunciadoHtml() +
+    '<div class="breadcrumb"><a id="ses-det-back">Workspace Sessions</a><i class="ti ti-chevron-right" style="font-size:11px;"></i><span style="color:#555;">' + ws + ' - ' + u + '</span></div>' +
+    '<div style="font-size:12px;color:#2563eb;margin-bottom:10px;"><i class="ti ti-device-desktop"></i> Asistencia remota</div>' +
+  '</div>' +
+  '<div style="padding:0 20px;padding-bottom:60px;">' +
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">' + cardsHtml + '</div>' +
+    '<div class="wsd-block-title">Detalles del Workspace</div>' +
+    '<div class="gws-card"><div style="display:grid;grid-template-columns:repeat(5,1fr);gap:14px;">' + fieldsHtml + '</div></div>' +
+  '</div></div>';
 }
 
 var gruposWSGroups = [
@@ -1226,8 +1633,62 @@ function pageUbicaciones(){
   return '<div class="page"><div class="page-header">' + enunciadoHtml() + '<div style="font-size:18px;font-weight:600;color:#1a1a1a;margin-bottom:8px;">Ubicaciones</div></div>' +
   '<div class="toolbar"><div class="btn-tool"><i class="ti ti-plus"></i> Nuevo</div><div class="btn-tool"><i class="ti ti-file-export"></i> Exportar</div><div style="flex:1"></div><div class="search-box"><i class="ti ti-search"></i><input placeholder="Buscar por término..."></div></div>' +
   '<div class="table-wrap"><table><thead><tr><th>Nombre</th><th>Dirección</th></tr></thead><tbody>' +
-  '<tr><td class="desc-link">Terrassa</td><td>Carrer de Vallhonrat, 45</td></tr>' +
-  '</tbody></table></div></div>';
+  '<tr class="clickable" id="ubi-terrassa-row"><td class="desc-link">Terrassa</td><td>Carrer de Vallhonrat, 45</td></tr>' +
+  '</tbody></table></div>' +
+  '<div style="padding:8px 18px;font-size:11px;color:#888;">Página 1 de 1 · Mostrando 1 a 1 de 1 resultados</div></div>';
+}
+
+function pageUbicacionDetail(){
+  return '<div class="page"><div class="page-header">' + enunciadoHtml() +
+    '<div class="breadcrumb"><a id="ubi-det-back">Ubicaciones</a><i class="ti ti-chevron-right" style="font-size:11px;"></i><span style="color:#555;">Terrassa</span></div>' +
+  '</div>' +
+  '<div class="detail-layout">' +
+    '<div class="detail-sidebar" style="width:180px;">' +
+      '<div class="detail-nav-item active" data-ubi-tab="general">Visión general</div>' +
+      '<div class="detail-nav-item" data-ubi-tab="redes">Redes <span class="detail-nav-count">0</span></div>' +
+      '<div class="detail-nav-item" data-ubi-tab="workspaces">Workspaces <span class="detail-nav-count">0</span></div>' +
+    '</div>' +
+    '<div class="events-panel" id="ubi-tab-content" style="overflow-y:auto;">' +
+    '</div>' +
+  '</div></div>';
+}
+
+function wireUbicacionDetail(){
+  var back = document.getElementById('ubi-det-back');
+  if (back) back.addEventListener('click', function(){ goPage('ubicaciones'); });
+  renderUbicacionTab('general');
+  document.querySelectorAll('[data-ubi-tab]').forEach(function(el){
+    el.addEventListener('click', function(){
+      document.querySelectorAll('[data-ubi-tab]').forEach(function(x){ x.classList.remove('active'); });
+      el.classList.add('active');
+      renderUbicacionTab(el.dataset.ubiTab);
+    });
+  });
+}
+
+function renderUbicacionTab(tab){
+  var el = document.getElementById('ubi-tab-content');
+  if (!el) return;
+  if (tab === 'general'){
+    el.innerHTML = '<div style="padding:12px 18px;">' +
+      '<div class="toolbar" style="padding:0 0 12px;background:transparent;border:none;">' +
+        '<div class="btn-tool"><i class="ti ti-refresh"></i> Recargar</div>' +
+        '<div class="btn-tool"><i class="ti ti-pencil"></i> Editar</div>' +
+      '</div>' +
+      '<div class="wsd-block-title" style="margin-top:0;">Visión general</div>' +
+      '<div class="gws-card"><div style="display:grid;grid-template-columns:repeat(5,1fr);gap:16px;">' +
+        '<div><div class="gws-field-label">Nombre</div><div class="gws-field-value" style="margin-bottom:0;color:#2563eb;">Terrassa</div></div>' +
+        '<div><div class="gws-field-label">Dirección</div><div class="gws-field-value" style="margin-bottom:0;">Carrer de Vallhonrat, 45</div></div>' +
+        '<div><div class="gws-field-label">Latitud</div><div class="gws-field-value" style="margin-bottom:0;">0</div></div>' +
+        '<div><div class="gws-field-label">Longitud</div><div class="gws-field-value" style="margin-bottom:0;">0</div></div>' +
+        '<div><div class="gws-field-label">Mapa</div><div class="gws-field-value" style="margin-bottom:0;"><span style="color:#2563eb;">Ver en Google Maps</span> <i class="ti ti-external-link" style="font-size:11px;"></i></div></div>' +
+      '</div></div>' +
+    '</div>';
+  } else if (tab === 'redes'){
+    el.innerHTML = '<div style="padding:12px 18px;"><div class="gws-empty"><i class="ti ti-network"></i>Sin redes asociadas</div></div>';
+  } else {
+    el.innerHTML = '<div style="padding:12px 18px;"><div class="gws-empty"><i class="ti ti-device-desktop"></i>Sin workspaces asociados</div></div>';
+  }
 }
 
 function pageRedes(){
@@ -1239,15 +1700,104 @@ function pageRedes(){
   '</tbody></table></div></div>';
 }
 
+var notificacionesRows = [
+  {mensaje:"Prueba de notificaciones persistentes",gravedad:"Informativo",destino:"Workspaces",zona:"(UTC+01:00) Brussels, Co...",fechaInicio:"7/9/26, 18:06:00",fechaFinal:"7/9/26, 19:06:00",estado:"Generada"}
+];
+
 function pageNotificaciones(){
-  return '<div class="page"><div class="page-header">' + enunciadoHtml() + '<div style="font-size:18px;font-weight:600;color:#1a1a1a;margin-bottom:8px;">Notificaciones</div></div>' +
-  '<div class="toolbar"><div class="btn-tool"><i class="ti ti-plus"></i> Nuevo</div><div class="btn-tool"><i class="ti ti-file-export"></i> Exportar</div><div style="flex:1"></div><div class="search-box"><i class="ti ti-search"></i><input placeholder="Buscar por término..."></div></div>' +
-  '<div class="table-wrap"><table><thead><tr><th>Nombre</th><th>Destinatarios</th><th>Estado</th></tr></thead><tbody>' +
-  '<tr><td class="desc-link">Baja de batería crítica</td><td>Equipos</td><td class="status-ok">Habilitado</td></tr>' +
-  '</tbody></table></div></div>';
+  var rowsHtml = notificacionesRows.map(function(r){
+    return '<tr class="clickable" data-notif-msg="' + r.mensaje + '">' +
+      '<td style="width:32px;"><input type="checkbox" class="gws-ws-checkbox"></td>' +
+      '<td class="desc-link">' + r.mensaje + '</td>' +
+      '<td>' + r.gravedad + '</td>' +
+      '<td>' + r.destino + '</td>' +
+      '<td>' + r.zona + '</td>' +
+      '<td>' + r.fechaInicio + '</td>' +
+      '<td>' + r.fechaFinal + '</td>' +
+      '<td>' + r.estado + '</td>' +
+    '</tr>';
+  }).join('');
+  return '<div class="page"><div class="page-header">' + enunciadoHtml() +
+    '<div style="font-size:18px;font-weight:600;color:#1a1a1a;margin-bottom:8px;"><i class="ti ti-bell" style="color:#f5813e;"></i> Notificaciones</div>' +
+  '</div>' +
+  '<div class="toolbar"><div class="btn-tool"><i class="ti ti-x"></i> Cerrar notificación</div><div class="btn-tool"><i class="ti ti-file-export"></i> Exportar</div><div class="btn-tool"><i class="ti ti-refresh"></i> Recargar</div><div style="flex:1"></div>' +
+  '<div class="search-box" style="flex:none;align-self:center;"><i class="ti ti-search"></i><input type="text" id="notif-search" placeholder="Buscar por término..."></div>' +
+  '<div class="filter-chip">Visibilidad: <b>Activo y programado</b></div></div>' +
+  '<div class="table-wrap"><table><thead><tr><th style="width:32px;"><input type="checkbox" class="gws-ws-checkbox"></th><th>Mensaje</th><th>Gravedad</th><th>Destino</th><th>Zona horaria</th><th>Fecha de inicio</th><th>Fecha de final...</th><th>Estado</th></tr></thead><tbody id="notif-tbody">' + rowsHtml + '</tbody></table></div>' +
+  '<div class="pager"><span></span><span>Página 1 de 1 · 1 a 1 de 1 resultados</span><span style="font-size:11px;color:#aaa;">Tamaño de página: 50</span></div></div>';
+}
+
+var notifDetailState = { mensaje: '' };
+
+function pageNotificacionDetail(){
+  var msg = notifDetailState.mensaje || 'Prueba de notificaciones persistentes';
+  return '<div class="page"><div class="page-header">' + enunciadoHtml() +
+    '<div class="breadcrumb"><a id="notif-det-back">Notificaciones</a><i class="ti ti-chevron-right" style="font-size:11px;"></i><span style="color:#555;">' + msg + '</span></div>' +
+  '</div>' +
+  '<div class="detail-layout">' +
+    '<div class="detail-sidebar" style="width:180px;">' +
+      '<div class="detail-nav-item active" data-notif-tab="general">Visión general</div>' +
+      '<div class="detail-nav-item" data-notif-tab="workspaces">Workspaces <span class="detail-nav-count blue">1</span></div>' +
+    '</div>' +
+    '<div class="events-panel" id="notif-tab-content" style="overflow-y:auto;"></div>' +
+  '</div></div>';
+}
+
+function wireNotificacionDetail(){
+  var back = document.getElementById('notif-det-back');
+  if (back) back.addEventListener('click', function(){ goPage('notificaciones'); });
+  renderNotificacionTab('general');
+  document.querySelectorAll('[data-notif-tab]').forEach(function(el){
+    el.addEventListener('click', function(){
+      document.querySelectorAll('[data-notif-tab]').forEach(function(x){ x.classList.remove('active'); });
+      el.classList.add('active');
+      renderNotificacionTab(el.dataset.notifTab);
+    });
+  });
+}
+
+function renderNotificacionTab(tab){
+  var el = document.getElementById('notif-tab-content');
+  if (!el) return;
+  var msg = notifDetailState.mensaje || 'Prueba de notificaciones persistentes';
+  var row = notificacionesRows.filter(function(r){ return r.mensaje === msg; })[0] || notificacionesRows[0];
+  if (tab === 'general'){
+    el.innerHTML = '<div style="padding:12px 18px;">' +
+      '<div class="toolbar" style="padding:0 0 12px;background:transparent;border:none;">' +
+        '<div class="btn-tool" style="color:#c0392b;"><i class="ti ti-x"></i> Cerrar notificación</div>' +
+        '<div class="btn-tool"><i class="ti ti-refresh"></i> Recargar</div>' +
+      '</div>' +
+      '<div class="wsd-block-title" style="margin-top:0;">Visión general</div>' +
+      '<div class="gws-card"><div style="display:grid;grid-template-columns:repeat(6,1fr);gap:14px;margin-bottom:14px;">' +
+        '<div><div class="gws-field-label">Zona horaria</div><div class="gws-field-value" style="margin-bottom:0;">' + row.zona + '</div></div>' +
+        '<div><div class="gws-field-label">Fecha de inicio</div><div class="gws-field-value" style="margin-bottom:0;">' + row.fechaInicio + '</div></div>' +
+        '<div><div class="gws-field-label">Fecha de finalización</div><div class="gws-field-value" style="margin-bottom:0;">' + row.fechaFinal + '</div></div>' +
+        '<div><div class="gws-field-label">Gravedad</div><div class="gws-field-value" style="margin-bottom:0;color:#c87d30;">' + row.gravedad + '</div></div>' +
+        '<div><div class="gws-field-label">Destino</div><div class="gws-field-value" style="margin-bottom:0;">' + row.destino + '</div></div>' +
+        '<div><div class="gws-field-label">Estado</div><div class="gws-field-value" style="margin-bottom:0;">' + row.estado + '</div></div>' +
+      '</div>' +
+      '<div style="margin-bottom:8px;"><div class="gws-field-label">Mensaje</div><div style="color:#2563eb;font-size:13px;">' + row.mensaje + '</div></div>' +
+      '<div style="margin-bottom:8px;"><div class="gws-field-label">Información</div><div style="font-size:13px;color:#222;">Prueba de notificaciones</div></div>' +
+      '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;">' +
+        '<div><div class="gws-field-label">Vincular</div><div class="gws-field-value" style="margin-bottom:0;">-</div></div>' +
+        '<div><div class="gws-field-label">Intermitencia</div><div class="gws-field-value" style="margin-bottom:0;">No</div></div>' +
+        '<div><div class="gws-field-label">Solicitar aceptación</div><div class="gws-field-value" style="margin-bottom:0;">No</div></div>' +
+        '<div><div class="gws-field-label">Deshabilitar minimizar</div><div class="gws-field-value" style="margin-bottom:0;">No</div></div>' +
+      '</div></div></div>';
+  } else {
+    el.innerHTML = '<div style="padding:12px 18px;">' +
+      '<div class="toolbar" style="padding:0 0 10px;background:transparent;border:none;"><div class="btn-tool"><i class="ti ti-file-export"></i> Exportar</div><div class="btn-tool"><i class="ti ti-refresh"></i> Recargar</div></div>' +
+      '<div class="search-box" style="flex:none;margin-bottom:12px;"><i class="ti ti-search"></i><input placeholder="Buscar por término..."></div>' +
+      '<table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:#eceae3;"><th style="padding:7px 14px;text-align:left;color:#555;border-bottom:0.5px solid #ddd;">Nombre</th><th style="padding:7px 14px;text-align:left;color:#555;border-bottom:0.5px solid #ddd;">Estado</th></tr></thead><tbody>' +
+        '<tr><td style="padding:8px 14px;color:#2563eb;border-bottom:0.5px solid #eee;">DESKTOP-DEFE7N5</td><td style="padding:8px 14px;color:#555;border-bottom:0.5px solid #eee;">Enviada correctamente</td></tr>' +
+      '</tbody></table>' +
+      '<div style="padding:8px 0;font-size:11px;color:#888;">Página 1 de 1 · 1 a 1 de 1 resultados</div>' +
+    '</div>';
+  }
 }
 
 var wifiRows = [
+  {ssid:"Yoigo Masmovil",isp:"-",pob:"Mengibar",pais:"ES",ws:"DESKTOP-HB4T4RK"},
   {ssid:"CHAKONEN",isp:"XFERA Moviles S.A",pob:"Villovieco",pais:"ES",ws:"DESKTOP-HB4T4RK"},
   {ssid:"AP_4LT4M1R4N0",isp:"America Movil Peru S.A.C",pob:"Lima",pais:"PE",ws:"LALTAMIRANO10.indra.es"},
   {ssid:"AYESA",isp:"",pob:"Madrid",pais:"ES",ws:"—"},
@@ -1280,10 +1830,91 @@ function renderRedesInalambricas(filterText){
            r.ws.toLowerCase().indexOf(q) !== -1;
   });
   tbody.innerHTML = filtered.map(function(r){
-    return '<tr><td class="desc-link">' + r.ssid + '</td><td>' + r.isp + '</td><td>' + r.pob + '</td><td>' + r.pais + '</td><td>' + r.ws + '</td></tr>';
+    return '<tr class="clickable" data-wifi-ssid="' + r.ssid + '"><td class="desc-link">' + r.ssid + '</td><td>' + r.isp + '</td><td>' + r.pob + '</td><td>' + r.pais + '</td><td>' + r.ws + '</td></tr>';
   }).join('');
+  tbody.querySelectorAll('tr[data-wifi-ssid]').forEach(function(tr){
+    tr.addEventListener('click', function(){
+      wifiDetailState.ssid = tr.dataset.wifiSsid;
+      goPage('wifidetail');
+    });
+  });
   var countEl = document.getElementById('wifi-count');
   if (countEl) countEl.textContent = filtered.length + ' resultado' + (filtered.length === 1 ? '' : 's');
+}
+
+var wifiDetailState = { ssid: '' };
+
+function pageWifiDetail(){
+  var ssid = wifiDetailState.ssid || 'Yoigo Masmovil';
+  var row = wifiRows.filter(function(r){ return r.ssid === ssid; })[0] || { ssid: ssid, isp: '-', pob: '-', pais: '-', ws: '-' };
+  // Datos especiales para Yoigo Masmovil (de la captura)
+  var isYoigo = ssid === 'Yoigo Masmovil';
+  var ipPublica = isYoigo ? '78.30.5.130' : '-';
+  var confianza = isYoigo ? 'No de confianza' : '-';
+  var poblacion = isYoigo ? 'Mengibar' : row.pob;
+  var pais = isYoigo ? 'ES' : row.pais;
+  var ws = isYoigo ? 'DESKTOP-HB4T4RK' : row.ws;
+  var isp = isYoigo ? '-' : row.isp;
+
+  return '<div class="page"><div class="page-header">' + enunciadoHtml() +
+    '<div class="breadcrumb"><a id="wifi-det-back">Redes inalámbricas</a><i class="ti ti-chevron-right" style="font-size:11px;"></i><span style="color:#555;">' + ssid + '</span></div>' +
+  '</div>' +
+  '<div class="detail-layout">' +
+    '<div class="detail-sidebar" style="width:180px;">' +
+      '<div class="detail-nav-item active" data-wifi-tab="general">Visión general</div>' +
+      '<div class="detail-nav-item" data-wifi-tab="workspaces">Workspaces <span class="detail-nav-count">0</span></div>' +
+    '</div>' +
+    '<div class="events-panel" id="wifi-tab-content" style="overflow-y:auto;">' +
+    '</div>' +
+  '</div></div>';
+}
+
+function wireWifiDetail(){
+  var back = document.getElementById('wifi-det-back');
+  if (back) back.addEventListener('click', function(){ goPage('redesinalambricas'); });
+  renderWifiDetailTab('general');
+  document.querySelectorAll('[data-wifi-tab]').forEach(function(el){
+    el.addEventListener('click', function(){
+      document.querySelectorAll('[data-wifi-tab]').forEach(function(x){ x.classList.remove('active'); });
+      el.classList.add('active');
+      renderWifiDetailTab(el.dataset.wifiTab);
+    });
+  });
+}
+
+function renderWifiDetailTab(tab){
+  var el = document.getElementById('wifi-tab-content');
+  if (!el) return;
+  var ssid = wifiDetailState.ssid || 'Yoigo Masmovil';
+  var isYoigo = ssid === 'Yoigo Masmovil';
+  var ipPublica = isYoigo ? '78.30.5.130' : '-';
+  var confianza = isYoigo ? 'No de confianza' : '-';
+  var poblacion = isYoigo ? 'Mengibar' : '-';
+  var isp = isYoigo ? '-' : '-';
+  var pais = isYoigo ? 'ES' : '-';
+  var ws = isYoigo ? 'DESKTOP-HB4T4RK' : '-';
+
+  if (tab === 'general'){
+    el.innerHTML = '<div style="padding:12px 18px;">' +
+      '<div class="toolbar" style="padding:0 0 12px;background:transparent;border:none;">' +
+        '<div class="btn-tool"><i class="ti ti-refresh"></i> Recargar</div>' +
+        '<div class="btn-tool"><i class="ti ti-pencil"></i> Editar</div>' +
+      '</div>' +
+      '<div class="wsd-block-title" style="margin-top:0;">Visión general</div>' +
+      '<div class="gws-card"><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;">' +
+        '<div><div class="gws-field-label">SSID</div><div class="gws-field-value" style="margin-bottom:0;color:#2563eb;">' + ssid + '</div></div>' +
+        '<div><div class="gws-field-label">IP Pública</div><div class="gws-field-value" style="margin-bottom:0;">' + ipPublica + '</div></div>' +
+        '<div><div class="gws-field-label">Workspace</div><div class="gws-field-value" style="margin-bottom:0;color:#2563eb;">' + ws + '</div></div>' +
+        '<div><div class="gws-field-label">De confianza</div><div class="gws-field-value" style="margin-bottom:0;">' + confianza + '</div></div>' +
+        '<div><div class="gws-field-label">ISP</div><div class="gws-field-value" style="margin-bottom:0;">' + isp + '</div></div>' +
+        '<div><div class="gws-field-label">Población</div><div class="gws-field-value" style="margin-bottom:0;">' + poblacion + '</div></div>' +
+        '<div><div class="gws-field-label">País</div><div class="gws-field-value" style="margin-bottom:0;">' + pais + '</div></div>' +
+        '<div><div class="gws-field-label">Red</div><div class="gws-field-value" style="margin-bottom:0;">-</div></div>' +
+      '</div></div>' +
+    '</div>';
+  } else {
+    el.innerHTML = '<div style="padding:12px 18px;"><div class="gws-empty"><i class="ti ti-device-desktop"></i>Sin workspaces asociados</div></div>';
+  }
 }
 
 /* ===================== ACTUALIZACIONES ===================== */
@@ -1375,17 +2006,434 @@ function pageActDirectivas(){
   return '<div class="page"><div class="page-header">' + enunciadoHtml() + '<div style="font-size:18px;font-weight:600;color:#1a1a1a;margin-bottom:8px;">Directivas de actualizaciones de Microsoft</div></div>' +
   '<div class="toolbar"><div style="flex:1"></div><div class="search-box"><i class="ti ti-search"></i><input placeholder="Buscar directiva de actualizaciones de Windows..."></div></div>' +
   '<div class="table-wrap"><table><thead><tr><th>Nombre</th><th>Objetivos de la directiva</th><th>Aprobaciones automáticas</th></tr></thead><tbody>' +
-  '<tr><td class="desc-link">Directiva de parches</td><td class="desc-link">Prueba para directiva de actualización</td><td class="status-ok">● Habilitado</td></tr>' +
+  '<tr class="clickable" id="directiva-parches-row"><td class="desc-link">Directiva de parches</td><td class="desc-link">Prueba para directiva de actualización</td><td class="status-ok">● Habilitado</td></tr>' +
   '</tbody></table></div></div>';
+}
+
+/* Datos de actualizaciones Microsoft para la directiva */
+var actMicrosoftRows = [
+  {kb:"2267602",desc:"Security Intelligence Update for Microsoft Defender Antivirus - KB2267602 (Version 1.459.72.0) - Current Channel (Broad)",estado:"Pendiente",producto:"Microsoft Defender Antivirus",gravedad:"-",fecha:"6/9/26",clasificacion:"Definition Upd...",aprobado:false},
+  {kb:"2267602",desc:"Security Intelligence Update for Microsoft Defender Antivirus - KB2267602 (Version 1.459.82.0) - Current Channel (Broad)",estado:"Aprobado",producto:"Microsoft Defender Antivirus",gravedad:"-",fecha:"6/9/26",clasificacion:"Definition Upd...",aprobado:true},
+  {kb:"",desc:"Intel Camera Driver Update (71.26100.0.20574)",estado:"Pendiente",producto:"Windows 11 Client, version 25...",gravedad:"-",fecha:"6/9/26",clasificacion:"Drivers",aprobado:false},
+  {kb:"",desc:"Advanced Micro Devices, Inc. System Driver Update (25.20.0.6)",estado:"Pendiente",producto:"Windows 11 Client, version 25...",gravedad:"-",fecha:"6/9/26",clasificacion:"Drivers",aprobado:true,checked:true},
+  {kb:"",desc:"Mediatek Inc. MEDIA Driver Update (1.7.0.52)",estado:"Pendiente",producto:"Windows 11 Client, version 25...",gravedad:"-",fecha:"6/9/26",clasificacion:"Drivers",aprobado:false},
+  {kb:"",desc:"Mediatek Inc. Bluetooth Driver Update (1.1147.0.616)",estado:"Pendiente",producto:"Windows 11 Client, version 25...",gravedad:"-",fecha:"6/9/26",clasificacion:"Drivers",aprobado:false},
+  {kb:"",desc:"Mediatek Inc. Bluetooth Driver Update (1.1147.0.616)",estado:"Aprobado",producto:"Windows 11 Client, version 25...",gravedad:"-",fecha:"6/9/26",clasificacion:"Drivers",aprobado:true,checked:true},
+  {kb:"",desc:"Mediatek Inc. Bluetooth Driver Update (1.1147.0.616)",estado:"Pendiente",producto:"Windows 11 Client, version 25...",gravedad:"-",fecha:"6/9/26",clasificacion:"Drivers",aprobado:false},
+  {kb:"",desc:"Intel Net Driver Update (2.1.5.7)",estado:"Pendiente",producto:"Windows 11 Client, version 25...",gravedad:"-",fecha:"6/9/26",clasificacion:"Drivers",aprobado:false},
+  {kb:"",desc:"Mediatek Inc. Bluetooth Driver Update (26.20.5.23)",estado:"Pendiente",producto:"Windows 11 Client, version 25...",gravedad:"-",fecha:"6/9/26",clasificacion:"Drivers",aprobado:true,checked:true},
+  {kb:"",desc:"Intel SoftwareComponent Driver Update (9.1.10010.2297)",estado:"Pendiente",producto:"Windows 11 Client, version 25...",gravedad:"-",fecha:"6/9/26",clasificacion:"Drivers",aprobado:false},
+  {kb:"",desc:"Realtek Semiconductor Corp. MEDIA Driver Update (6.0.9030.1)",estado:"Pendiente",producto:"Windows 11 Client, version 25...",gravedad:"-",fecha:"6/9/26",clasificacion:"Drivers",aprobado:false}
+];
+
+var actNoCatalogadasRows = [
+  {kb:"",desc:"HP - Firmware - 1.22.0.0",estado:"Pendiente",producto:"-",gravedad:"-",fecha:"20/11/25",clasificacion:"Drivers"},
+  {kb:"",desc:"Synaptics Incorporated - Biometric - 5.5.28.1099",estado:"Pendiente",producto:"-",gravedad:"-",fecha:"9/9/25",clasificacion:"Drivers"},
+  {kb:"KB2267602",desc:"Actualización de inteligencia de seguridad para Microsoft Defender Antivirus - KB2267602 (versión 1.441.594.0) - Canal actual (ampliado)",estado:"Pendiente",producto:"Microsoft Defender Antivirus",gravedad:"-",fecha:"30/11/25",clasificacion:"Definition Upd..."},
+  {kb:"KB5033052",desc:"2024-01 Actualización de Windows 10 Version 20H2 para x64 sistemas basados en (KB5033052)",estado:"Pendiente",producto:"Windows 10, version 1903 and ...",gravedad:"-",fecha:"16/9/25",clasificacion:"Critical Updates"},
+  {kb:"KB5065429",desc:"Actualización de características a Windows 10, versión 22H2",estado:"Pendiente",producto:"-",gravedad:"-",fecha:"16/9/25",clasificacion:"Upgrades"},
+  {kb:"KB2267602",desc:"Security Intelligence Update for Microsoft Defender Antivirus - KB2267602 (Version 1.443.491.0) - Current Channel (Broad)",estado:"Pendiente",producto:"Microsoft Defender Antivirus",gravedad:"-",fecha:"3/1/26",clasificacion:"Definition Upd..."},
+  {kb:"KB2267602",desc:"Actualización de inteligencia de seguridad para Microsoft Defender Antivirus - KB2267602 (versión 1.441.521.0) - Canal actual (ampliado)",estado:"Pendiente",producto:"Microsoft Defender Antivirus",gravedad:"-",fecha:"27/11/25",clasificacion:"Definition Upd..."},
+  {kb:"",desc:"SAMSUNG Electronics Co., Ltd. - USB - 2.21.0.0",estado:"Pendiente",producto:"-",gravedad:"-",fecha:"16/9/25",clasificacion:"Drivers"},
+  {kb:"KB5065426",desc:"Windows 11, version 24H2",estado:"Pendiente",producto:"-",gravedad:"-",fecha:"10/9/25",clasificacion:"Upgrades"},
+  {kb:"KB5064403",desc:"2025-09 Actualización acumulativa de .NET Framework 3.5 y 4.8.1 para Windows 11, versión 23H2 para x64 (KB5064403)",estado:"Pendiente",producto:"-",gravedad:"-",fecha:"10/9/25",clasificacion:"Updates"},
+  {kb:"KB2267602",desc:"Actualización de inteligencia de seguridad para Microsoft Defender Antivirus - KB2267602 (versión 1.441.640.0) - Canal actual (ampliado)",estado:"Pendiente",producto:"Microsoft Defender Antivirus",gravedad:"-",fecha:"1/12/25",clasificacion:"Definition Upd..."},
+  {kb:"KB5066791",desc:"2025-10 Actualización acumulativa para Windows 10 Version 22H2 para sistemas basados en x64 (KB5066791)",estado:"Pendiente",producto:"-",gravedad:"-",fecha:"28/11/25",clasificacion:"Security Upd..."}
+];
+
+function pageActDirectivaDetail(){
+  return '<div class="page"><div class="page-header">' + enunciadoHtml() +
+    '<div class="breadcrumb"><a id="dir-det-back" style="color:#2563eb;cursor:pointer;">Directivas de actualizaciones de Microsoft</a><i class="ti ti-chevron-right" style="font-size:11px;"></i><span style="color:#555;">Directiva de parches</span></div>' +
+    '<div style="font-size:22px;font-weight:700;color:#1a1a1a;margin:6px 0 0;">Directiva de parches</div>' +
+  '</div>' +
+  '<div style="padding:0 20px;padding-bottom:60px;">' +
+    '<div class="gws-tabs" id="dir-det-tabs">' +
+      '<div class="gws-tab active" data-dir-tab="detalles">Detalles</div>' +
+      '<div class="gws-tab" data-dir-tab="actms">Actualizaciones de Microsoft</div>' +
+      '<div class="gws-tab" data-dir-tab="aprobaut">Aprobaciones automáticas</div>' +
+      '<div class="gws-tab" data-dir-tab="nocatalogadas">Actualizaciones no catalogadas</div>' +
+      '<div class="gws-tab" data-dir-tab="aprobautnocat">Aprobaciones automáticas no catalogadas</div>' +
+    '</div>' +
+    '<div id="dir-det-content" class="gws-panel"></div>' +
+  '</div></div>';
+}
+
+function wireActDirectivaDetail(){
+  var back = document.getElementById('dir-det-back');
+  if (back) back.addEventListener('click', function(){ goPage('actdirectivas'); });
+  renderActDirectivaTab('detalles');
+  document.querySelectorAll('[data-dir-tab]').forEach(function(el){
+    el.addEventListener('click', function(){
+      document.querySelectorAll('[data-dir-tab]').forEach(function(x){ x.classList.remove('active'); });
+      el.classList.add('active');
+      renderActDirectivaTab(el.dataset.dirTab);
+    });
+  });
+}
+
+function renderActDirectivaTab(tab){
+  var el = document.getElementById('dir-det-content');
+  if (!el) return;
+
+  if (tab === 'detalles'){
+    el.innerHTML =
+      '<div style="display:grid;grid-template-columns:1fr 220px;gap:20px;">' +
+        '<div class="gws-card">' +
+          '<div class="gws-field-label">Nombre</div>' +
+          '<div class="gws-field-value" style="margin-bottom:20px;color:#2563eb;">Directiva de parches</div>' +
+          '<div style="text-align:right;"><button class="sp-btn sp-btn-cancel">Edit</button></div>' +
+          '<div style="margin-top:16px;"><div class="gws-field-label" style="font-size:13px;font-weight:600;color:#222;margin-bottom:8px;">Destinatarios</div>' +
+          '<table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:#eceae3;"><th style="padding:7px 14px;text-align:left;color:#555;border-bottom:0.5px solid #ddd;">Nombre</th></tr></thead>' +
+          '<tbody><tr><td style="padding:8px 14px;color:#2563eb;border-bottom:0.5px solid #eee;">Prueba para directiva de actualización</td></tr></tbody></table></div>' +
+        '</div>' +
+        '<div>' +
+          '<div class="gws-side-box"><i class="ti ti-calendar" style="color:#f5813e;"></i><div><div class="gws-side-label">Fecha de creación</div><div class="gws-side-value">12/3/25</div></div></div>' +
+          '<div class="gws-side-box"><i class="ti ti-user" style="color:#f5813e;"></i><div><div class="gws-side-label">Creado por</div><div class="gws-side-value">Joan Serra</div></div></div>' +
+        '</div>' +
+      '</div>';
+  }
+  else if (tab === 'actms'){
+    var subTabsHtml = '<div style="display:flex;gap:16px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">' +
+      '<div style="display:flex;gap:8px;"><span style="font-size:12px;font-weight:600;color:#f5813e;border-bottom:2px solid #f5813e;padding-bottom:4px;cursor:pointer;">Todo</span>' +
+      '<span style="font-size:12px;color:#888;padding-bottom:4px;cursor:pointer;">Pendiente de aprobación</span>' +
+      '<span style="font-size:12px;color:#888;padding-bottom:4px;cursor:pointer;">Aprobado</span>' +
+      '<span style="font-size:12px;color:#888;padding-bottom:4px;cursor:pointer;">Rechazado</span></div>' +
+      '<div style="flex:1;"></div>' +
+      '<button class="sp-btn sp-btn-submit" style="display:flex;align-items:center;gap:4px;"><i class="ti ti-check"></i> Aprobar</button>' +
+      '<button class="sp-btn sp-btn-cancel" style="display:flex;align-items:center;gap:4px;color:#c0392b;border-color:#c0392b;"><i class="ti ti-x"></i> Rechazar</button>' +
+    '</div>';
+
+    var filtersHtml = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px;">' +
+      '<div style="border:0.5px solid #ccc;border-radius:6px;padding:6px 10px;font-size:12px;color:#999;display:flex;align-items:center;justify-content:space-between;">Seleccionar clasificaciones <i class="ti ti-chevron-down"></i></div>' +
+      '<div style="border:0.5px solid #ccc;border-radius:6px;padding:6px 10px;font-size:12px;color:#999;display:flex;align-items:center;justify-content:space-between;">Seleccionar productos <i class="ti ti-chevron-down"></i></div>' +
+      '<div style="border:0.5px solid #ccc;border-radius:6px;padding:6px 10px;font-size:12px;color:#999;display:flex;align-items:center;justify-content:space-between;">Seleccionar reemplazada <i class="ti ti-chevron-down"></i></div>' +
+      '<div style="border:0.5px solid #d0d0d0;border-radius:6px;padding:6px 10px;font-size:12px;color:#555;display:flex;align-items:center;gap:6px;"><i class="ti ti-calendar" style="color:#888;"></i> 7 sept 2025 <i class="ti ti-x" style="color:#999;margin-left:auto;"></i></div>' +
+    '</div>' +
+    '<div class="search-box" style="flex:none;margin-bottom:10px;max-width:280px;"><i class="ti ti-search"></i><input placeholder="Buscar actualizaciones..."></div>' +
+    '<div style="font-size:11px;color:#888;text-align:right;margin-bottom:8px;">Última actualización el 7/9/26, 3:31:04</div>';
+
+    var rowsHtml = actMicrosoftRows.map(function(r){
+      var dot = r.estado === 'Aprobado' ? '● ' : '○ ';
+      var dotColor = r.estado === 'Aprobado' ? '#16a34a' : '#888';
+      var checkIcon = r.checked ? '<i class="ti ti-circle-check" style="color:#f5813e;font-size:16px;margin-right:8px;"></i>' : '<span style="display:inline-block;width:24px;"></span>';
+      return '<tr>' +
+        '<td style="padding:8px 14px;border-bottom:0.5px solid #eee;white-space:nowrap;">' + checkIcon + r.kb + '</td>' +
+        '<td style="padding:8px 14px;border-bottom:0.5px solid #eee;"><span style="color:#2563eb;">' + r.desc + '</span></td>' +
+        '<td style="padding:8px 14px;border-bottom:0.5px solid #eee;"><span style="color:' + dotColor + ';">' + dot + '</span>' + r.estado + '</td>' +
+        '<td style="padding:8px 14px;border-bottom:0.5px solid #eee;">' + r.producto + '</td>' +
+        '<td style="padding:8px 14px;border-bottom:0.5px solid #eee;">' + r.gravedad + '</td>' +
+        '<td style="padding:8px 14px;border-bottom:0.5px solid #eee;">' + r.fecha + '</td>' +
+        '<td style="padding:8px 14px;border-bottom:0.5px solid #eee;">' + r.clasificacion + '</td>' +
+      '</tr>';
+    }).join('');
+
+    var tableHtml = '<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:12px;">' +
+      '<thead><tr style="background:#eceae3;"><th style="padding:7px 14px;text-align:left;color:#555;border-bottom:0.5px solid #ddd;">KB</th>' +
+      '<th style="padding:7px 14px;text-align:left;color:#555;border-bottom:0.5px solid #ddd;">Descripción de revisión</th>' +
+      '<th style="padding:7px 14px;text-align:left;color:#555;border-bottom:0.5px solid #ddd;">Estado</th>' +
+      '<th style="padding:7px 14px;text-align:left;color:#555;border-bottom:0.5px solid #ddd;">Producto</th>' +
+      '<th style="padding:7px 14px;text-align:left;color:#555;border-bottom:0.5px solid #ddd;">Gravedad</th>' +
+      '<th style="padding:7px 14px;text-align:left;color:#555;border-bottom:0.5px solid #ddd;">Fecha de lanz...</th>' +
+      '<th style="padding:7px 14px;text-align:left;color:#555;border-bottom:0.5px solid #ddd;">Clasificación</th>' +
+      '</tr></thead><tbody>' + rowsHtml + '</tbody></table></div>' +
+      '<div style="padding:8px 0;font-size:11px;color:#888;display:flex;align-items:center;gap:8px;">' +
+        '<button class="pager-btn" disabled>Anterior</button>' +
+        '<span>Página 1 de 2</span>' +
+        '<button class="pager-btn">Siguiente &gt;</button>' +
+        '<span style="margin-left:auto;">Por página: 100</span>' +
+      '</div>';
+
+    el.innerHTML = filtersHtml + subTabsHtml + tableHtml;
+  }
+  else if (tab === 'aprobaut'){
+    el.innerHTML = '<div style="text-align:right;margin-bottom:10px;"><button class="sp-btn sp-btn-submit"><i class="ti ti-plus"></i> Nuevo</button></div>' +
+      '<table style="width:100%;border-collapse:collapse;font-size:12px;">' +
+      '<thead><tr style="background:#eceae3;"><th style="padding:7px 14px;text-align:left;color:#555;border-bottom:0.5px solid #ddd;">Clasificación</th>' +
+      '<th style="padding:7px 14px;text-align:left;color:#555;border-bottom:0.5px solid #ddd;">Productos</th>' +
+      '<th style="padding:7px 14px;text-align:left;color:#555;border-bottom:0.5px solid #ddd;">Días d...</th>' +
+      '<th style="padding:7px 14px;text-align:left;color:#555;border-bottom:0.5px solid #ddd;">Acciones</th></tr></thead>' +
+      '<tbody>' +
+        '<tr><td style="padding:8px 14px;border-bottom:0.5px solid #eee;color:#2563eb;">Updates</td><td style="padding:8px 14px;border-bottom:0.5px solid #eee;color:#2563eb;">Windows 10, Windows 10 LTSB</td><td style="padding:8px 14px;border-bottom:0.5px solid #eee;">15</td><td style="padding:8px 14px;border-bottom:0.5px solid #eee;color:#2563eb;"><i class="ti ti-external-link" style="font-size:12px;"></i> View Detail</td></tr>' +
+        '<tr><td style="padding:8px 14px;border-bottom:0.5px solid #eee;color:#2563eb;">Drivers</td><td style="padding:8px 14px;border-bottom:0.5px solid #eee;color:#2563eb;">Windows 10</td><td style="padding:8px 14px;border-bottom:0.5px solid #eee;">15</td><td style="padding:8px 14px;border-bottom:0.5px solid #eee;color:#2563eb;"><i class="ti ti-external-link" style="font-size:12px;"></i> View Detail</td></tr>' +
+      '</tbody></table>';
+  }
+  else if (tab === 'nocatalogadas'){
+    var filtersHtml2 = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;">' +
+      '<div style="border:0.5px solid #ccc;border-radius:6px;padding:6px 10px;font-size:12px;color:#999;display:flex;align-items:center;justify-content:space-between;">Seleccionar clasificaciones <i class="ti ti-chevron-down"></i></div>' +
+      '<div style="border:0.5px solid #ccc;border-radius:6px;padding:6px 10px;font-size:12px;color:#999;display:flex;align-items:center;justify-content:space-between;">Seleccionar productos <i class="ti ti-chevron-down"></i></div>' +
+      '<div style="border:0.5px solid #d0d0d0;border-radius:6px;padding:6px 10px;font-size:12px;color:#555;display:flex;align-items:center;gap:6px;"><i class="ti ti-calendar" style="color:#888;"></i> 7 sept 2025 <i class="ti ti-x" style="color:#999;margin-left:auto;"></i></div>' +
+    '</div>' +
+    '<div class="search-box" style="flex:none;margin-bottom:10px;max-width:280px;"><i class="ti ti-search"></i><input placeholder="Buscar actualizaciones..."></div>';
+
+    var subTabsHtml2 = '<div style="display:flex;gap:16px;align-items:center;margin-bottom:12px;">' +
+      '<span style="font-size:12px;font-weight:600;color:#f5813e;border-bottom:2px solid #f5813e;padding-bottom:4px;cursor:pointer;">Todo</span>' +
+      '<span style="font-size:12px;color:#888;padding-bottom:4px;cursor:pointer;">Pendiente de aprobación</span>' +
+      '<span style="font-size:12px;color:#888;padding-bottom:4px;cursor:pointer;">Aprobado</span>' +
+      '<span style="font-size:12px;color:#888;padding-bottom:4px;cursor:pointer;">Rechazado</span>' +
+    '</div>';
+
+    var ncRows = actNoCatalogadasRows.map(function(r){
+      return '<tr>' +
+        '<td style="padding:8px 14px;border-bottom:0.5px solid #eee;white-space:nowrap;">' + r.kb + '</td>' +
+        '<td style="padding:8px 14px;border-bottom:0.5px solid #eee;"><span style="color:#2563eb;">' + r.desc + '</span></td>' +
+        '<td style="padding:8px 14px;border-bottom:0.5px solid #eee;color:#888;">○ ' + r.estado + '</td>' +
+        '<td style="padding:8px 14px;border-bottom:0.5px solid #eee;">' + r.producto + '</td>' +
+        '<td style="padding:8px 14px;border-bottom:0.5px solid #eee;">' + r.gravedad + '</td>' +
+        '<td style="padding:8px 14px;border-bottom:0.5px solid #eee;">' + r.fecha + '</td>' +
+        '<td style="padding:8px 14px;border-bottom:0.5px solid #eee;">' + r.clasificacion + '</td>' +
+      '</tr>';
+    }).join('');
+
+    el.innerHTML = filtersHtml2 + subTabsHtml2 +
+      '<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:12px;">' +
+      '<thead><tr style="background:#eceae3;"><th style="padding:7px 14px;text-align:left;color:#555;border-bottom:0.5px solid #ddd;">KB</th>' +
+      '<th style="padding:7px 14px;text-align:left;color:#555;border-bottom:0.5px solid #ddd;">Descripción de revisión</th>' +
+      '<th style="padding:7px 14px;text-align:left;color:#555;border-bottom:0.5px solid #ddd;">Estado</th>' +
+      '<th style="padding:7px 14px;text-align:left;color:#555;border-bottom:0.5px solid #ddd;">Producto</th>' +
+      '<th style="padding:7px 14px;text-align:left;color:#555;border-bottom:0.5px solid #ddd;">Gravedad</th>' +
+      '<th style="padding:7px 14px;text-align:left;color:#555;border-bottom:0.5px solid #ddd;">Fecha de lanz...</th>' +
+      '<th style="padding:7px 14px;text-align:left;color:#555;border-bottom:0.5px solid #ddd;">Clasificación</th>' +
+      '</tr></thead><tbody>' + ncRows + '</tbody></table></div>' +
+      '<div style="padding:8px 0;font-size:11px;color:#888;display:flex;align-items:center;gap:8px;">' +
+        '<button class="pager-btn" disabled>Anterior</button>' +
+        '<span>Página 1 de 1</span>' +
+        '<button class="pager-btn" disabled>Siguiente</button>' +
+        '<span style="margin-left:auto;">Por página: 100</span>' +
+      '</div>';
+  }
+  else if (tab === 'aprobautnocat'){
+    el.innerHTML = '<div style="text-align:right;margin-bottom:10px;"><button class="sp-btn sp-btn-submit"><i class="ti ti-plus"></i> Nuevo</button></div>' +
+      '<table style="width:100%;border-collapse:collapse;font-size:12px;">' +
+      '<thead><tr style="background:#eceae3;"><th style="padding:7px 14px;text-align:left;color:#555;border-bottom:0.5px solid #ddd;">Clasificación</th>' +
+      '<th style="padding:7px 14px;text-align:left;color:#555;border-bottom:0.5px solid #ddd;">Productos</th>' +
+      '<th style="padding:7px 14px;text-align:left;color:#555;border-bottom:0.5px solid #ddd;">Incluir actualizaciones sin productos</th>' +
+      '<th style="padding:7px 14px;text-align:left;color:#555;border-bottom:0.5px solid #ddd;">Días después de la lle...</th>' +
+      '<th style="padding:7px 14px;text-align:left;color:#555;border-bottom:0.5px solid #ddd;">Acciones</th></tr></thead>' +
+      '<tbody>' +
+        '<tr><td style="padding:8px 14px;border-bottom:0.5px solid #eee;">Security Updates</td><td style="padding:8px 14px;border-bottom:0.5px solid #eee;color:#2563eb;">Microsoft Defender Antivirus</td><td style="padding:8px 14px;border-bottom:0.5px solid #eee;">No</td><td style="padding:8px 14px;border-bottom:0.5px solid #eee;">12</td><td style="padding:8px 14px;border-bottom:0.5px solid #eee;color:#2563eb;"><i class="ti ti-external-link" style="font-size:12px;"></i> View Detail</td></tr>' +
+      '</tbody></table>';
+  }
 }
 
 function pageActDestinatarios(){
   return '<div class="page"><div class="page-header">' + enunciadoHtml() + '<div style="font-size:18px;font-weight:600;color:#1a1a1a;margin-bottom:8px;">Destinatarios</div></div>' +
   '<div class="toolbar"><div class="btn-tool"><i class="ti ti-plus"></i> Nuevo</div><div class="btn-tool"><i class="ti ti-file-export"></i> Exportar</div><div style="flex:1"></div><div class="search-box"><i class="ti ti-search"></i><input placeholder="Buscar por término..."></div></div>' +
   '<div class="table-wrap"><table><thead><tr><th>Nombre</th><th>Grupos de reporte</th><th>Tiene programación establecida</th></tr></thead><tbody>' +
-  '<tr><td class="desc-link">Prueba para directiva de actualización</td><td>RP Training 2</td><td>✓</td></tr>' +
+  '<tr class="clickable" id="dest-prueba-row"><td class="desc-link">Prueba para directiva de actualización</td><td>RP Training 2</td><td>✓</td></tr>' +
   '<tr><td class="desc-link">Equipos</td><td>RT, OI, PV</td><td>✓</td></tr>' +
   '</tbody></table></div></div>';
+}
+
+/* ===================== DETALLE DESTINATARIO ===================== */
+function pageActDestinatarioDetail(){
+  return '<div class="page"><div class="page-header">' + enunciadoHtml() +
+    '<div class="breadcrumb"><a id="dest-det-back" style="color:#2563eb;cursor:pointer;">Destinatarios</a><i class="ti ti-chevron-right" style="font-size:11px;"></i><span style="color:#555;">Prueba para directiva de actualización</span></div>' +
+    '<div style="font-size:22px;font-weight:700;color:#1a1a1a;margin:6px 0 0;">Prueba para directiva de actualización</div>' +
+  '</div>' +
+  '<div style="padding:0 20px;padding-bottom:60px;">' +
+    '<div class="gws-tabs" id="dest-det-tabs">' +
+      '<div class="gws-tab active" data-dest-tab="detalles">Detalles</div>' +
+      '<div class="gws-tab" data-dest-tab="programacion">Programación</div>' +
+    '</div>' +
+    '<div id="dest-det-content" class="gws-panel"></div>' +
+  '</div>' +
+  /* Panel lateral de edición */
+  '<div id="dest-edit-overlay" class="side-panel-overlay">' +
+    '<div class="side-panel">' +
+      '<div class="side-panel-header">' +
+        '<div class="side-panel-title">Editar destinatario de directiva de parches</div>' +
+        '<button class="side-panel-close" id="dest-edit-close"><i class="ti ti-x"></i></button>' +
+      '</div>' +
+      '<div class="sp-label">Nombre <span class="req">*</span></div>' +
+      '<input class="sp-input" id="dest-edit-nombre" value="Prueba para directiva de actualización">' +
+      '<div class="sp-label">Grupos de reporte <span class="req">*</span></div>' +
+      '<div style="border:0.5px solid #ccc;border-radius:6px;padding:8px 10px;font-size:13px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
+        '<span style="background:#8b2500;color:#fff;border-radius:4px;padding:3px 8px;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:5px;">' +
+          'R2 RP Training 2 <i class="ti ti-x" style="font-size:11px;cursor:pointer;"></i>' +
+        '</span>' +
+      '</div>' +
+      '<div class="sp-label">Directiva de parches de Microsoft</div>' +
+      '<select class="sp-select">' +
+        '<option selected>Directiva de parches</option>' +
+      '</select>' +
+      '<div style="margin-top:20px;">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;">' +
+          '<div>' +
+            '<span style="font-size:13px;font-weight:500;color:#333;">Reiniciar tras aplicar actualizaciones</span>' +
+            ' <i class="ti ti-info-circle" style="font-size:13px;color:#aaa;"></i>' +
+          '</div>' +
+          '<label style="position:relative;display:inline-block;width:40px;height:22px;">' +
+            '<input type="checkbox" id="dest-toggle-reiniciar" checked style="opacity:0;width:0;height:0;">' +
+            '<span id="dest-toggle-reiniciar-track" style="position:absolute;cursor:pointer;inset:0;background:#f5813e;border-radius:22px;transition:.2s;">' +
+              '<span style="position:absolute;height:16px;width:16px;left:21px;bottom:3px;background:#fff;border-radius:50%;transition:.2s;"></span>' +
+            '</span>' +
+          '</label>' +
+        '</div>' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;">' +
+          '<div>' +
+            '<span style="font-size:13px;font-weight:500;color:#333;">Wake on LAN</span>' +
+            ' <i class="ti ti-info-circle" style="font-size:13px;color:#aaa;"></i>' +
+          '</div>' +
+          '<label style="position:relative;display:inline-block;width:40px;height:22px;">' +
+            '<input type="checkbox" id="dest-toggle-wol" style="opacity:0;width:0;height:0;">' +
+            '<span id="dest-toggle-wol-track" style="position:absolute;cursor:pointer;inset:0;background:#ccc;border-radius:22px;transition:.2s;">' +
+              '<span style="position:absolute;height:16px;width:16px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.2s;"></span>' +
+            '</span>' +
+          '</label>' +
+        '</div>' +
+      '</div>' +
+      '<div class="sp-footer" style="justify-content:space-between;">' +
+        '<button class="sp-btn" style="color:#c0392b;border-color:#c0392b;background:#fff;display:flex;align-items:center;gap:5px;" id="dest-edit-delete"><i class="ti ti-trash"></i> Delete</button>' +
+        '<div style="display:flex;gap:8px;">' +
+          '<button class="sp-btn sp-btn-cancel" id="dest-edit-cancel"><i class="ti ti-x"></i> Cancelar</button>' +
+          '<button class="sp-btn sp-btn-submit" id="dest-edit-guardar"><i class="ti ti-device-floppy"></i> Guardar</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+  '</div>' +
+  '</div>';
+}
+
+function wireActDestinatarioDetail(){
+  var back = document.getElementById('dest-det-back');
+  if (back) back.addEventListener('click', function(){ goPage('actdestinatarios'); });
+
+  renderDestTab('detalles');
+
+  document.querySelectorAll('[data-dest-tab]').forEach(function(el){
+    el.addEventListener('click', function(){
+      document.querySelectorAll('[data-dest-tab]').forEach(function(x){ x.classList.remove('active'); });
+      el.classList.add('active');
+      renderDestTab(el.dataset.destTab);
+    });
+  });
+
+  /* Panel edición */
+  function openDestEdit(){ document.getElementById('dest-edit-overlay').classList.add('open'); }
+  function closeDestEdit(){ document.getElementById('dest-edit-overlay').classList.remove('open'); }
+  document.getElementById('dest-edit-close').addEventListener('click', closeDestEdit);
+  document.getElementById('dest-edit-cancel').addEventListener('click', closeDestEdit);
+  document.getElementById('dest-edit-delete').addEventListener('click', closeDestEdit);
+  document.getElementById('dest-edit-guardar').addEventListener('click', closeDestEdit);
+  document.getElementById('dest-edit-overlay').addEventListener('click', function(e){
+    if (e.target === this) closeDestEdit();
+  });
+
+  /* Toggles interactivos */
+  function wireToggle(cbId, trackId){
+    var cb = document.getElementById(cbId);
+    var track = document.getElementById(trackId);
+    if (!cb || !track) return;
+    function update(){
+      var on = cb.checked;
+      track.style.background = on ? '#f5813e' : '#ccc';
+      track.querySelector('span').style.left = on ? '21px' : '3px';
+    }
+    cb.addEventListener('change', update);
+    update();
+  }
+  wireToggle('dest-toggle-reiniciar','dest-toggle-reiniciar-track');
+  wireToggle('dest-toggle-wol','dest-toggle-wol-track');
+
+  /* El botón Edit lo inyectamos desde renderDestTab, necesitamos un delegado en el contenedor */
+  document.getElementById('dest-det-content').addEventListener('click', function(e){
+    if (e.target.closest && e.target.closest('#dest-open-edit')){
+      openDestEdit();
+    }
+  });
+}
+
+function renderDestTab(tab){
+  var el = document.getElementById('dest-det-content');
+  if (!el) return;
+
+  if (tab === 'detalles'){
+    el.innerHTML =
+      '<div style="display:grid;grid-template-columns:1fr 220px;gap:20px;">' +
+        '<div class="gws-card">' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0;margin-bottom:18px;">' +
+            '<div>' +
+              '<div class="gws-field-label">Nombre</div>' +
+              '<div style="font-size:13px;color:#222;margin-bottom:16px;">Prueba para directiva de actualización</div>' +
+            '</div>' +
+            '<div>' +
+              '<div class="gws-field-label">Grupos de reporte</div>' +
+              '<div style="font-size:13px;color:#222;margin-bottom:16px;">1</div>' +
+            '</div>' +
+          '</div>' +
+          '<div style="margin-bottom:14px;">' +
+            '<div class="gws-field-label">Reiniciar tras aplicar actualizaciones</div>' +
+            '<div style="font-size:13px;color:#2563eb;">Sí</div>' +
+          '</div>' +
+          '<div style="margin-bottom:14px;">' +
+            '<div class="gws-field-label">Wake on LAN</div>' +
+            '<div style="font-size:13px;color:#222;">No</div>' +
+          '</div>' +
+          '<div style="margin-bottom:18px;">' +
+            '<div class="gws-field-label">Directiva de ajuste de Microsoft</div>' +
+            '<div style="font-size:13px;"><a style="color:#2563eb;text-decoration:underline;cursor:pointer;">Directiva de parches</a></div>' +
+          '</div>' +
+          '<div style="text-align:right;"><button class="sp-btn sp-btn-cancel" id="dest-open-edit">Edit</button></div>' +
+          '<div style="border-top:0.5px solid #e0dfd8;margin-top:20px;padding-top:16px;">' +
+            '<div class="gws-field-label" style="font-size:13px;font-weight:600;color:#222;margin-bottom:8px;">Grupos de reporte</div>' +
+            '<table style="width:100%;border-collapse:collapse;font-size:12px;">' +
+              '<thead><tr style="border-bottom:0.5px solid #ddd;"><th style="padding:6px 0;color:#555;text-align:left;font-weight:500;">Nombre</th></tr></thead>' +
+              '<tbody><tr><td style="padding:8px 0;color:#2563eb;border-bottom:0.5px solid #eee;">RP Training 2</td></tr></tbody>' +
+            '</table>' +
+          '</div>' +
+        '</div>' +
+        '<div>' +
+          '<div class="gws-side-box"><i class="ti ti-calendar" style="color:#f5813e;"></i><div><div class="gws-side-label">Fecha de creación</div><div class="gws-side-value">17/9/25</div></div></div>' +
+          '<div class="gws-side-box"><i class="ti ti-user" style="color:#f5813e;"></i><div><div class="gws-side-label">Creado por</div><div style="font-size:14px;font-weight:600;color:#c0392b;">Usuario eliminado</div></div></div>' +
+        '</div>' +
+      '</div>';
+  }
+  else if (tab === 'programacion'){
+    el.innerHTML = buildScheduleGrid();
+  }
+}
+
+/* ---- Grid horario de programación ---- */
+function buildScheduleGrid(){
+  var days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  /* slots activos: [día, horaInicio*2, horaFin*2) en slots de 30min (0=0h, 7=3h30) */
+  /* Sunday: 0h–3h30 → slots 0..6 (7 slots), Friday: igual, Saturday: igual */
+  var activeSlots = {Sunday:{},Friday:{},Saturday:{}};
+  for (var s = 0; s < 7; s++){
+    activeSlots.Sunday[s] = true;
+    activeSlots.Friday[s] = true;
+    activeSlots.Saturday[s] = true;
+  }
+
+  /* Cabecera de horas: 0h..23h */
+  var hourHeaders = '';
+  for (var h = 0; h < 24; h++){
+    hourHeaders += '<th style="min-width:40px;padding:4px 2px;text-align:center;font-size:10px;color:#666;font-weight:400;border:0.5px solid #e0dfd8;white-space:nowrap;" colspan="2">' + h + 'h</th>';
+  }
+
+  /* Filas de días */
+  var rowsHtml = days.map(function(day){
+    var cells = '';
+    for (var slot = 0; slot < 48; slot++){
+      var active = activeSlots[day] && activeSlots[day][slot];
+      cells += '<td style="width:20px;height:24px;border:0.5px solid #e0dfd8;background:' + (active ? '#f5813e' : '#fff') + ';padding:0;"></td>';
+    }
+    return '<tr><td style="padding:6px 10px;font-size:12px;color:#333;white-space:nowrap;font-weight:500;border:0.5px solid #e0dfd8;background:#fafaf8;min-width:80px;">' + day + '</td>' + cells + '</tr>';
+  }).join('');
+
+  return '<div style="text-align:right;margin-bottom:12px;">' +
+    '<button class="sp-btn sp-btn-submit">Editar</button>' +
+  '</div>' +
+  '<div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:16px;">' +
+    '<div><div class="gws-field-label">Periodicidad</div><div style="font-size:13px;color:#222;">Semana 1, Semana 4</div></div>' +
+    '<div><div class="gws-field-label">Huso horario</div><div style="font-size:13px;color:#2563eb;">(UTC+01:00) Amsterdam, Berlin, Bern, Rome, Stockholm, Vienna</div></div>' +
+  '</div>' +
+  '<div style="overflow-x:auto;">' +
+    '<table style="border-collapse:collapse;table-layout:fixed;">' +
+      '<thead><tr><th style="min-width:80px;border:0.5px solid #e0dfd8;background:#fafaf8;"></th>' + hourHeaders + '</tr></thead>' +
+      '<tbody>' + rowsHtml + '</tbody>' +
+    '</table>' +
+  '</div>';
 }
 
 /* ===================== DETALLE GRUPO DE WORKSPACES (ejercicio de programación) ===================== */
