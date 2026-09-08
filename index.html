@@ -451,7 +451,7 @@ function computeToken(seedStr){
   var h = hashString(seedStr);
   var rnd = lcg(h || 1);
   function chunk(len){ var o=''; for (var i=0;i<len;i++){ o += alphabet[Math.floor(rnd()*alphabet.length)]; } return o; }
-  return 'FLX-' + chunk(4) + '-' + chunk(5) + '-' + chunk(4);
+  return 'FLX-' + chunk(5) + '-' + chunk(7) + '-' + chunk(4) + '-' + chunk(6);
 }
 function updateGlobalToken(seedStr){
   var el = document.getElementById('global-token-value');
@@ -489,6 +489,22 @@ function refreshPageToken(){
       grupoWSState.activeGroup === GRUPO_EJERCICIO_APAGADO &&
       hasCorrectProgramacion(grupoWSState.activeGroup)){
     updateGlobalToken(CORRECT_PROG_KEY);
+    return;
+  }
+  if (state.currentPage === 'actdestinatarios' && hasCorrectCombinedDest()){
+    updateGlobalToken(CORRECT_COMBINED_DEST_KEY);
+    return;
+  }
+  if (state.currentPage === 'actdestinatariodetail' && destDetailActiveTab === 'programacion'){
+    var dcur = getCurrentDestData();
+    if (dcur && dcur.programacion){
+      var pkey = destProgStateKey(dcur.programacion.dias, dcur.programacion.horaInicio, dcur.programacion.horaFin);
+      if (pkey === CORRECT_PROG_DEST_KEY){ updateGlobalToken(CORRECT_PROG_DEST_KEY); return; }
+    }
+  }
+  if (state.currentPage === 'flujodetail' && flujoDetailState.index !== null){
+    var flive = flujoLiveState();
+    updateGlobalToken(flujoStateKey(flive));
     return;
   }
   var area = document.getElementById('content-area');
@@ -546,7 +562,14 @@ function goPage(page){
     if (opsSearch) opsSearch.addEventListener('input', function(){ renderOps(opsSearch.value); });
   }
   else if (page === 'opdetail'){ area.innerHTML = pageOpDetail(); }
-  else if (page === 'flujos') area.innerHTML = pageFlujos();
+  else if (page === 'flujos'){
+    area.innerHTML = pageFlujos();
+    wireFlujos();
+  }
+  else if (page === 'flujodetail'){
+    area.innerHTML = pageFlujoDetail();
+    wireFlujoDetail();
+  }
   else if (page === 'informes') area.innerHTML = pageInformes();
   else if (page === 'crearia') area.innerHTML = pageCrearIA();
   else if (page === 'inquilinos') area.innerHTML = pageInquilinos();
@@ -627,8 +650,7 @@ function goPage(page){
   else if (page === 'actpatches') area.innerHTML = pageActPatches();
   else if (page === 'actdirectivas'){
     area.innerHTML = pageActDirectivas();
-    var dirRow = document.getElementById('directiva-parches-row');
-    if (dirRow) dirRow.addEventListener('click', function(){ goPage('actdirectivadetail'); });
+    wireActDirectivas();
   }
   else if (page === 'actdirectivadetail'){
     area.innerHTML = pageActDirectivaDetail();
@@ -636,8 +658,7 @@ function goPage(page){
   }
   else if (page === 'actdestinatarios'){
     area.innerHTML = pageActDestinatarios();
-    var destRow = document.getElementById('dest-prueba-row');
-    if (destRow) destRow.addEventListener('click', function(){ goPage('actdestinatariodetail'); });
+    wireActDestinatarios();
   }
   else if (page === 'actdestinatariodetail'){
     area.innerHTML = pageActDestinatarioDetail();
@@ -763,17 +784,931 @@ function toggleEvent(i){
   icon.innerHTML = isOpen ? '<i class="ti ti-chevron-right"></i>' : '<i class="ti ti-chevron-down"></i>';
 }
 
+/* ===================== FLUJOS: CATÁLOGOS ===================== */
+var COMPROBAR_CADA_OPTS = ['5 minutos','10 minutos','15 minutos','20 minutos','30 minutos','45 minutos','1 hora'];
+var PERIODO_OPTS = ['Últimos 5 minutos','Últimos 15 minutos','Última hora','Último día'];
+var DIAS_SEMANA_CRON = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
+
+var CONDICION_TIPOS = [
+  {id:'proceso-curso', icon:'ti-list-details', color:'#2563eb', nombre:'Existencia de un proceso en curso', desc:'Este script comprueba si se está ejecutando un proceso.', operadores:['Igual','Distinto de','Contiene'], tienePeriodo:true},
+  {id:'evento-windows', icon:'ti-brand-windows', color:'#2563eb', nombre:'Identificador de registro de eventos de Windows detectado (Windows)', desc:'This script detects an event ID in Windows Event Viewer', operadores:['Igual','Distinto de']},
+  {id:'os-version', icon:'ti-brand-windows', color:'#2563eb', nombre:'Versión del sistema operativo (Windows)', desc:'Este script detecta la versión del sistema operativo', operadores:['Contiene','Igual','Distinto de']},
+  {id:'os-idioma', icon:'ti-brand-windows', color:'#2563eb', nombre:'Idioma del sistema operativo (Windows)', desc:'Este script detecta el idioma del sistema operativo', operadores:['Igual','Distinto de']},
+  {id:'espacio-disco', icon:'ti-brand-windows', color:'#2563eb', nombre:'Porcentaje de espacio libre en disco del sistema operativo', desc:'Este script detecta el porcentaje de espacio libre en disco del sistema operativo', operadores:['Igual','Mayor que','Menor que','Mayor o igual','Menor o igual'], valorTipo:'number'},
+  {id:'cron-match', icon:'ti-clock', color:'#2563eb', nombre:'Cron Match', desc:'La condición "Cron Match" comprueba si una cadena en formato cron se cumple solo cuando la fecha y la hora actuales coinciden exactamente con la expresión cron especificada.', operadores:['En'], esCron:true},
+  {id:'edr-estado', icon:'ti-device-mobile-cog', color:'#888', nombre:'¿Está instalado y funcionando el EDR?', desc:'¿Está instalado CrowdStrike?', operadores:['Igual','Distinto de']},
+  {id:'servicios-impresion', icon:'ti-printer', color:'#c0392b', nombre:'Estado de los servicios de impresión', desc:'Este es un microservicio de condición de tipo booleano. Este microservicio comprueba si los servicios de impresión están activos, incluidos los servicios de impresión de Citrix si están presentes.', operadores:['Igual','Distinto de']},
+  {id:'uptime-horas', icon:'ti-clock', color:'#2563eb', nombre:'Uptime total en horas', desc:'Este es un microservicio de condición que lee el tiempo de actividad local del sistema y devuelve el...', operadores:['Igual','Mayor que','Menor que','Mayor o igual','Menor o igual'], valorTipo:'number'}
+];
+
+function condicionTipoById(id){ return CONDICION_TIPOS.filter(function(c){ return c.id === id; })[0]; }
+
+var ACCION_CATALOGO = [
+  {icon:'ti-printer', color:'#c0392b', nombre:'1/2.- Instalación de impresora árbol y escáner', desc:'1/2.- Instalación de impresora árbol y escáner'},
+  {icon:'ti-printer', color:'#c0392b', nombre:'2/2.- Agrega las colas de impresión Arbol3 al perfil del usuario', desc:'2/2.- Agrega las colas de impresión Arbol3 al perfil del usuario'},
+  {icon:'ti-printer', color:'#16a34a', nombre:'Iniciar spooler', desc:'Iniciar servicio cola impresión'},
+  {icon:'ti-apps', color:'#f5813e', nombre:'Get the open and active applications of a user', desc:'Get the open and active applications of a user'},
+  {icon:'ti-device-desktop', color:'#2563eb', nombre:'Consigue números de serie de monitores conectados', desc:'Este script recupera los números de serie de todos los monitores conectados usando consultas WMI. Muestra información del monitor, incluyendo fabricante, modelo y número de serie.'},
+  {icon:'ti-list-check', color:'#f5813e', nombre:'Actualizaciones pendientes', desc:'Actualizaciones pendientes'},
+  {icon:'ti-brand-windows', color:'#f5813e', nombre:'Actualización Windows 11', desc:'Actualización Windows 11'},
+  {icon:'ti-share', color:'#f5813e', nombre:'Actualizar Java a la última versión', desc:'Este script comprueba la última versión de Java JDK disponible en Oracle y la descarga/instala automáticamente. Si se instala, detectará la versión actual de Java y la comparará con la última versión disponible.'},
+  {icon:'ti-users', color:'#f5813e', nombre:'Listar a todos los usuarios con privilegios administrativos', desc:'Este script recupera y muestra todas las cuentas de usuario con privilegios administrativos.'},
+  {icon:'ti-tool', color:'#f5813e', nombre:'Limpieza Temporales', desc:'Limpieza Temporales'},
+  {icon:'ti-shield-check', color:'#2563eb', nombre:'Instalar actualizaciones de Windows (sin reiniciar)', desc:'Instalar actualizaciones de Windows sin reiniciar'},
+  {icon:'ti-brand-firefox', color:'#e8590c', nombre:'Borrar cache y cookies Firefox', desc:'Borrar cache y cookies Firefox'}
+];
+
+/* ===================== FLUJOS: RESUMEN DE NODOS ===================== */
+function buildCronSummary(cs){
+  var horaTxt = 'A las ' + cs.horaInicio;
+  if (cs.patron === 'diario'){
+    if (cs.diario.modo === 'lv') return horaTxt + ', de lunes a viernes';
+    return horaTxt + (cs.diario.cadaDias > 1 ? ', cada ' + cs.diario.cadaDias + ' días' : '');
+  }
+  if (cs.patron === 'semanal'){
+    var dias = cs.semanal.dias;
+    if (dias.length === 0) return horaTxt;
+    var diasLower = dias.map(function(d){ return d.toLowerCase(); });
+    var diasLabel = diasLower.length === 1 ? 'sólo el ' + diasLower[0]
+      : 'sólo el ' + diasLower.slice(0,-1).join(', ') + ', y ' + diasLower[diasLower.length-1];
+    return horaTxt + ', ' + diasLabel;
+  }
+  if (cs.patron === 'mensual') return horaTxt + ', el día ' + cs.mensual.diaMes + ' de cada mes';
+  if (cs.patron === 'intervalo') return 'Cada ' + cs.intervalo.horas + ' horas';
+  if (cs.patron === 'personalizado') return cs.personalizado.expresion || horaTxt;
+  return horaTxt;
+}
+
+function nuevoCronBuilderState(){
+  return { horaInicio:'02:00', patron:'diario',
+    diario:{ modo:'cada', cadaDias:1 },
+    semanal:{ dias:[] },
+    mensual:{ diaMes:1 },
+    intervalo:{ horas:1 },
+    personalizado:{ expresion:'' }
+  };
+}
+
+function nodoResumenLinea(nodo){
+  if (nodo.tipo === 'accion') return nodo.desc || '';
+  var ct = condicionTipoById(nodo.condId);
+  if (!ct) return '';
+  if (ct.esCron) return nodo.cronResumen || '';
+  return (nodo.operador || '') + ' ' + (nodo.valor || '');
+}
+function nodoTitulo(nodo){
+  if (nodo.tipo === 'accion') return nodo.nombre;
+  var ct = condicionTipoById(nodo.condId);
+  return ct ? ct.nombre : '';
+}
+function nodoIcono(nodo){
+  if (nodo.tipo === 'accion') return nodo.icon;
+  var ct = condicionTipoById(nodo.condId);
+  return ct ? ct.icon : 'ti-help-circle';
+}
+function nodoColor(nodo){
+  if (nodo.tipo === 'accion') return nodo.color;
+  var ct = condicionTipoById(nodo.condId);
+  return ct ? ct.color : '#888';
+}
+
+/* ===================== FLUJOS: DATOS ===================== */
+var flujosData = [
+  {
+    nombre: 'Compatibilidad Windows 11', descripcion: 'Compatibilidad Windows 11',
+    tipo: 'Workspace', version: 6, tiempoReutilizacionH: 23, soloDeteccion: false,
+    notificacionActiva: false, aplicarA: 'Grupos de workspaces', targets: ['Grupo Simón'],
+    habilitado: true, creadoEl: '18/2/26, 16:08:34', fechaActualizacion: '6/3/26, 18:26:58',
+    nodos: [
+      { tipo:'condicion', condId:'os-version', operador:'Contiene', valor:'Windows 10' },
+      { tipo:'accion', nombre:'Check Windows 11 compatibility', icon:'ti-apps', color:'#6b7f1f', desc:'' }
+    ]
+  },
+  {
+    nombre: 'Tarea programada', descripcion: 'Tarea programada',
+    tipo: 'Workspace', version: 1, tiempoReutilizacionH: 24, soloDeteccion: false,
+    notificacionActiva: false, aplicarA: 'Todos los Workspaces', targets: [],
+    habilitado: false, creadoEl: '10/1/26, 9:00:00', fechaActualizacion: '10/1/26, 9:00:00',
+    nodos: [
+      { tipo:'condicion', condId:'cron-match', operador:'En', comprobarCada:'10 minutos',
+        cronResumen: 'A las 05:04, sólo el lunes, miércoles, y jueves',
+        cronState: { horaInicio:'05:04', patron:'semanal', diario:{modo:'cada',cadaDias:1}, semanal:{dias:['Lunes','Miércoles','Jueves']}, mensual:{diaMes:1}, intervalo:{horas:1}, personalizado:{expresion:''} }
+      }
+    ]
+  },
+  {
+    nombre: 'Reiniciar Servicio Imp', descripcion: 'Reiniciar Servicio',
+    tipo: 'Sesión', version: 1, tiempoReutilizacionH: 1, soloDeteccion: false,
+    notificacionActiva: false, aplicarA: 'Todos los Workspaces', targets: [],
+    habilitado: false, creadoEl: '5/1/26, 12:00:00', fechaActualizacion: '5/1/26, 12:00:00',
+    nodos: [
+      { tipo:'condicion', condId:'servicios-impresion', operador:'Igual', valor:'Inactivo', comprobarCada:'15 minutos' },
+      { tipo:'accion', nombre:'Iniciar spooler', icon:'ti-printer', color:'#16a34a', desc:'' }
+    ]
+  }
+];
+
+var flujoDetailState = { index: null, activeTab: 'general' };
+var flujoEditState = { editing: false, nodosBuffer: [] };
+
+/* ===================== FLUJOS: EJERCICIO DE CORRECCIÓN ===================== */
+/* La clave se construye a partir de TODO el contenido relevante del flujo:
+   visión general (nombre, descripción, tipo, tiempo de reutilización, solo
+   detección), notificación, destino, y la secuencia exacta de condiciones
+   y acciones configuradas en el Flujo. Cualquier diferencia en cualquiera
+   de estos puntos genera un código distinto. */
+function flujoStateKey(f){
+  var nodosKey = (f.nodos || []).map(function(n){
+    if (n.tipo === 'condicion'){
+      var ct = condicionTipoById(n.condId);
+      if (ct && ct.esCron){
+        return 'cond:' + n.condId + '|cada:' + (n.comprobarCada||'') + '|cron:' + (n.cronResumen||'');
+      }
+      return 'cond:' + n.condId + '|cada:' + (n.comprobarCada||'') + '|op:' + (n.operador||'') + '|val:' + (n.valor||'') + '|per:' + (n.periodo||'');
+    }
+    return 'accion:' + n.nombre;
+  }).join(';');
+  var targetsKey = (f.targets || []).slice().sort().join(',');
+  return 'flujo:' +
+    'nombre:' + (f.nombre||'').trim().toLowerCase() + '|' +
+    'desc:' + (f.descripcion||'').trim().toLowerCase() + '|' +
+    'tipo:' + (f.tipo||'') + '|' +
+    'tiempo:' + f.tiempoReutilizacionH + '|' +
+    'solodet:' + (f.soloDeteccion?'si':'no') + '|' +
+    'notif:' + (f.notificacionActiva?'si':'no') + '|' +
+    'destino:' + (f.aplicarA||'') + '|' +
+    'targets:' + targetsKey + '|' +
+    'nodos:' + nodosKey;
+}
+
+/* No hay una combinación "correcta" fija programada aquí: el token de un
+   flujo es siempre el hash determinista de TODO su contenido (visión
+   general + nodos). Cada configuración distinta produce un código distinto
+   y estable, para que el profesor pueda montar el ejercicio que quiera,
+   anotar el código resultante de la configuración que pida, y usarlo como
+   respuesta correcta en su plataforma de e-learning. */
+
+/* Estado "en vivo" del flujo actualmente visible en el detalle: combina los
+   campos guardados con el buffer de nodos en edición (si el canvas está en
+   modo edición) o con los campos del formulario abierto (Crear/Editar) */
+function flujoLiveState(overrides){
+  var base = (flujoDetailState.index !== null) ? flujosData[flujoDetailState.index] : {};
+  var merged = {
+    nombre: base.nombre, descripcion: base.descripcion, tipo: base.tipo,
+    tiempoReutilizacionH: base.tiempoReutilizacionH, soloDeteccion: base.soloDeteccion,
+    notificacionActiva: base.notificacionActiva, aplicarA: base.aplicarA,
+    targets: base.targets || [],
+    nodos: flujoEditState.editing ? flujoEditState.nodosBuffer : (base.nodos || [])
+  };
+  if (overrides) for (var k in overrides) merged[k] = overrides[k];
+  return merged;
+}
+
+/* ===================== FLUJOS: LISTA ===================== */
 function pageFlujos(){
-  var rows = [
-    ["Compatibilidad Windows 11","Compatibilidad Windows ...","Workspace","23h 0m 0s","Deshabilitado"],
-    ["Tarea programada","Tarea programada","Workspace","24h 0m 0s","Deshabilitado"],
-    ["Reiniciar Servicio Imp","Reiniciar Servicio","Sesión","1h 0m 0s","Deshabilitado"]
-  ];
-  var rowsHtml = rows.map(function(r){ return '<tr><td class="desc-link">' + r[0] + '</td><td>' + r[1] + '</td><td>' + r[2] + '</td><td>' + r[3] + '</td><td>' + r[4] + '</td></tr>'; }).join('');
+  var rowsHtml = flujosData.map(function(f, i){
+    var tiempoTxt = f.tiempoReutilizacionH + 'h 0m 0s';
+    return '<tr class="clickable" data-flujo-index="' + i + '"><td class="desc-link">' + f.nombre + '</td><td>' + f.descripcion + '</td><td>' + f.tipo + '</td><td>' + tiempoTxt + '</td><td>' + (f.habilitado ? 'Habilitado' : 'Deshabilitado') + '</td></tr>';
+  }).join('');
   return '<div class="page"><div class="page-header">' + enunciadoHtml() + '<div style="font-size:18px;font-weight:600;color:#1a1a1a;margin-bottom:8px;">Flexxible Training Site - Flujos</div></div>' +
-  '<div class="toolbar"><div class="btn-tool"><i class="ti ti-plus"></i> Nuevo</div><div class="btn-tool"><i class="ti ti-file-export"></i> Exportar</div><div class="btn-tool"><i class="ti ti-refresh"></i> Recargar</div><div style="flex:1"></div><div class="search-box"><i class="ti ti-search"></i><input placeholder="Buscar por término..."></div></div>' +
+  '<div class="toolbar"><div class="btn-tool" id="flujo-nuevo-btn"><i class="ti ti-plus"></i> Nuevo</div><div class="btn-tool"><i class="ti ti-file-export"></i> Exportar</div><div class="btn-tool"><i class="ti ti-refresh"></i> Recargar</div><div style="flex:1"></div><div class="search-box"><i class="ti ti-search"></i><input placeholder="Buscar por término..."></div></div>' +
   '<div class="table-wrap"><table><thead><tr><th>Nombre</th><th>Descripción</th><th>Tipo</th><th>Tiempo de re...</th><th>Habilitado</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div>' +
-  '<div class="pager"><span></span><span>Página 1 de 1 · 1 a 3 de 3 resultados</span><span style="font-size:11px;color:#aaa;">Tamaño de página: 50</span></div></div>';
+  '<div class="pager"><span></span><span>Página 1 de 1 · 1 a ' + flujosData.length + ' de ' + flujosData.length + ' resultados</span><span style="font-size:11px;color:#aaa;">Tamaño de página: 50</span></div>' +
+  /* Panel Crear nuevo flujo */
+  '<div id="flujo-nuevo-overlay" class="side-panel-overlay">' +
+    '<div class="side-panel" style="width:560px;">' +
+      '<div class="side-panel-header">' +
+        '<div class="side-panel-title">Crear nuevo flujo</div>' +
+        '<button class="side-panel-close" id="flujo-nuevo-close"><i class="ti ti-x"></i></button>' +
+      '</div>' +
+      '<div class="wsd-block-title" style="margin-top:0;">Visión general</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">' +
+        '<div><div class="sp-label">Nombre (español) <span class="req">*</span></div><input class="sp-input" id="flujo-nuevo-nombre" placeholder="Introduce un nombre (esp...)"></div>' +
+        '<div><div class="sp-label">Descripción (español) <span class="req">*</span></div><input class="sp-input" id="flujo-nuevo-desc" placeholder="Introduce una descripción ..."></div>' +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">' +
+        '<div><div class="sp-label">Tipo <span class="req">*</span></div>' +
+          '<select class="sp-select" id="flujo-nuevo-tipo"><option value="">Selecciona un tipo</option><option value="Workspace">Workspace</option><option value="Sesión">Sesión</option></select>' +
+        '</div>' +
+        '<div><div class="sp-label">Tiempo de reutilización <span class="req">*</span></div>' +
+          '<div style="display:flex;align-items:center;gap:10px;"><input type="range" min="0" max="24" value="1" id="flujo-nuevo-slider" style="flex:1;accent-color:#f5813e;"><span id="flujo-nuevo-slider-label" style="font-size:13px;color:#333;min-width:32px;">1 h</span></div>' +
+        '</div>' +
+      '</div>' +
+      '<label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#333;margin-bottom:18px;cursor:pointer;"><input type="checkbox" id="flujo-nuevo-solodeteccion" style="accent-color:#f5813e;width:15px;height:15px;"> Solo detección</label>' +
+      '<div class="wsd-block-title">Notificación</div>' +
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">' +
+        destToggleHtml('flujo-nuevo-notif','flujo-nuevo-notif-track','', false) +
+        '<span id="flujo-nuevo-notif-label" style="font-size:13px;color:#888;">Inactivo</span>' +
+      '</div>' +
+      '<div class="wsd-block-title">Destino</div>' +
+      '<div><div class="sp-label">Aplicar a <span class="req">*</span></div>' +
+        flujoAplicaraSelectHtml('flujo-nuevo-aplicara') +
+        flujoTargetPickerHtml('flujo-nuevo') +
+      '</div>' +
+      '<div class="sp-footer" style="justify-content:flex-end;gap:8px;">' +
+        '<button class="sp-btn sp-btn-cancel" id="flujo-nuevo-cancel"><i class="ti ti-x"></i> Cancelar</button>' +
+        '<button class="sp-btn sp-btn-submit" id="flujo-nuevo-guardar"><i class="ti ti-device-floppy"></i> Guardar</button>' +
+      '</div>' +
+    '</div>' +
+  '</div>' +
+  '</div>';
+}
+
+function wireFlujos(){
+  document.querySelectorAll('[data-flujo-index]').forEach(function(tr){
+    tr.addEventListener('click', function(){
+      flujoDetailState = { index: parseInt(tr.dataset.flujoIndex, 10), activeTab: 'general' };
+      flujoEditState = { editing: false, nodosBuffer: [] };
+      goPage('flujodetail');
+    });
+  });
+
+  var overlay = document.getElementById('flujo-nuevo-overlay');
+  document.getElementById('flujo-nuevo-btn').addEventListener('click', function(){
+    document.getElementById('flujo-nuevo-nombre').value = '';
+    document.getElementById('flujo-nuevo-desc').value = '';
+    document.getElementById('flujo-nuevo-tipo').value = '';
+    document.getElementById('flujo-nuevo-slider').value = 1;
+    document.getElementById('flujo-nuevo-slider-label').textContent = '1 h';
+    document.getElementById('flujo-nuevo-solodeteccion').checked = false;
+    setToggleVisual('flujo-nuevo-notif','flujo-nuevo-notif-track', false);
+    document.getElementById('flujo-nuevo-notif-label').textContent = 'Inactivo';
+    document.getElementById('flujo-nuevo-aplicara').value = 'Todos los Workspaces';
+    renderFlujoTargetPicker('flujo-nuevo', 'Todos los Workspaces', []);
+    overlay.classList.add('open');
+  });
+  function closeFlujoNuevo(){ overlay.classList.remove('open'); refreshPageToken(); }
+  document.getElementById('flujo-nuevo-close').addEventListener('click', closeFlujoNuevo);
+  document.getElementById('flujo-nuevo-cancel').addEventListener('click', closeFlujoNuevo);
+  overlay.addEventListener('click', function(e){ if (e.target === this) closeFlujoNuevo(); });
+
+  function updateFlujoNuevoLiveToken(){
+    var live = {
+      nombre: document.getElementById('flujo-nuevo-nombre').value,
+      descripcion: document.getElementById('flujo-nuevo-desc').value,
+      tipo: document.getElementById('flujo-nuevo-tipo').value,
+      tiempoReutilizacionH: parseInt(document.getElementById('flujo-nuevo-slider').value, 10),
+      soloDeteccion: document.getElementById('flujo-nuevo-solodeteccion').checked,
+      notificacionActiva: notifCb.checked,
+      aplicarA: document.getElementById('flujo-nuevo-aplicara').value,
+      targets: flujoTargetSeleccionActual('flujo-nuevo'),
+      nodos: []
+    };
+    var key = flujoStateKey(live);
+    updateGlobalToken(key);
+  }
+  ['flujo-nuevo-nombre','flujo-nuevo-desc'].forEach(function(id){
+    document.getElementById(id).addEventListener('input', updateFlujoNuevoLiveToken);
+  });
+  document.getElementById('flujo-nuevo-tipo').addEventListener('change', updateFlujoNuevoLiveToken);
+  document.getElementById('flujo-nuevo-aplicara').addEventListener('change', function(){
+    renderFlujoTargetPicker('flujo-nuevo', this.value, []);
+    updateFlujoNuevoLiveToken();
+  });
+  document.getElementById('flujo-nuevo-target-list').addEventListener('change', function(e){
+    if (e.target.classList.contains('flujo-nuevo-target-cb')) updateFlujoNuevoLiveToken();
+  });
+  document.getElementById('flujo-nuevo-solodeteccion').addEventListener('change', updateFlujoNuevoLiveToken);
+  document.getElementById('flujo-nuevo-slider').addEventListener('input', function(){
+    document.getElementById('flujo-nuevo-slider-label').textContent = this.value + ' h';
+    updateFlujoNuevoLiveToken();
+  });
+  var notifCb = document.getElementById('flujo-nuevo-notif');
+  notifCb.addEventListener('change', function(){
+    setToggleVisual('flujo-nuevo-notif','flujo-nuevo-notif-track', notifCb.checked);
+    document.getElementById('flujo-nuevo-notif-label').textContent = notifCb.checked ? 'Activo' : 'Inactivo';
+    updateFlujoNuevoLiveToken();
+  });
+
+  document.getElementById('flujo-nuevo-guardar').addEventListener('click', function(){
+    var nombre = document.getElementById('flujo-nuevo-nombre').value.trim();
+    var desc = document.getElementById('flujo-nuevo-desc').value.trim();
+    var tipo = document.getElementById('flujo-nuevo-tipo').value;
+    if (!nombre || !desc || !tipo){ alert('Nombre, Descripción y Tipo son obligatorios.'); return; }
+    var aplicarA = document.getElementById('flujo-nuevo-aplicara').value;
+    var targets = flujoTargetSeleccionActual('flujo-nuevo');
+    if (flujoTargetOptionsFor(aplicarA).length > 0 && targets.length === 0){
+      alert('Selecciona al menos un objetivo para "' + aplicarA + '".');
+      return;
+    }
+    var ahora = '8/9/26, 12:00:00';
+    flujosData.push({
+      nombre: nombre, descripcion: desc, tipo: tipo,
+      version: 1, tiempoReutilizacionH: parseInt(document.getElementById('flujo-nuevo-slider').value, 10),
+      soloDeteccion: document.getElementById('flujo-nuevo-solodeteccion').checked,
+      notificacionActiva: notifCb.checked,
+      aplicarA: aplicarA,
+      targets: targets,
+      habilitado: false, creadoEl: ahora, fechaActualizacion: ahora,
+      nodos: []
+    });
+    goPage('flujos');
+  });
+}
+
+/* ===================== FLUJOS: DETALLE ===================== */
+function pageFlujoDetail(){
+  var f = flujosData[flujoDetailState.index];
+  return '<div class="page"><div class="page-header">' + enunciadoHtml() +
+    '<div class="breadcrumb"><a id="flujo-det-back" style="color:#2563eb;cursor:pointer;">Flujos</a><i class="ti ti-chevron-right" style="font-size:11px;"></i><span style="color:#555;">' + f.nombre + '</span> <span style="background:#222;color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:3px;margin-left:6px;">PREVIEW</span></div>' +
+  '</div>' +
+  '<div class="detail-layout">' +
+    '<div class="detail-sidebar" style="width:180px;">' +
+      '<div class="detail-nav-item active" data-flujo-tab="general">Visión general</div>' +
+      '<div class="detail-nav-item" data-flujo-tab="notificacion">Notificación</div>' +
+      '<div class="detail-nav-item" data-flujo-tab="destino">Destino</div>' +
+      '<div class="detail-nav-item" data-flujo-tab="flujo">Flujo</div>' +
+    '</div>' +
+    '<div class="events-panel" id="flujo-tab-content" style="overflow-y:auto;"></div>' +
+  '</div>' +
+  /* Panel editar visión general */
+  '<div id="flujo-edit-overlay" class="side-panel-overlay">' +
+    '<div class="side-panel" style="width:560px;">' +
+      '<div class="side-panel-header"><div class="side-panel-title">Editar flujo</div><button class="side-panel-close" id="flujo-edit-close"><i class="ti ti-x"></i></button></div>' +
+      '<div class="wsd-block-title" style="margin-top:0;">Visión general</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">' +
+        '<div><div class="sp-label">Nombre (español) <span class="req">*</span></div><input class="sp-input" id="flujo-edit-nombre"></div>' +
+        '<div><div class="sp-label">Descripción (español) <span class="req">*</span></div><input class="sp-input" id="flujo-edit-desc"></div>' +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">' +
+        '<div><div class="sp-label">Tipo <span class="req">*</span></div><select class="sp-select" id="flujo-edit-tipo"><option value="Workspace">Workspace</option><option value="Sesión">Sesión</option></select></div>' +
+        '<div><div class="sp-label">Tiempo de reutilización <span class="req">*</span></div>' +
+          '<div style="display:flex;align-items:center;gap:10px;"><input type="range" min="0" max="24" id="flujo-edit-slider" style="flex:1;accent-color:#f5813e;"><span id="flujo-edit-slider-label" style="font-size:13px;color:#333;min-width:32px;"></span></div>' +
+        '</div>' +
+      '</div>' +
+      '<label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#333;margin-bottom:18px;cursor:pointer;"><input type="checkbox" id="flujo-edit-solodeteccion" style="accent-color:#f5813e;width:15px;height:15px;"> Solo detección</label>' +
+      '<div class="wsd-block-title">Notificación</div>' +
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">' +
+        destToggleHtml('flujo-edit-notif','flujo-edit-notif-track','', false) +
+        '<span id="flujo-edit-notif-label" style="font-size:13px;color:#888;">Inactivo</span>' +
+      '</div>' +
+      '<div class="wsd-block-title">Destino</div>' +
+      '<div><div class="sp-label">Aplicar a <span class="req">*</span></div>' +
+        flujoAplicaraSelectHtml('flujo-edit-aplicara') +
+        flujoTargetPickerHtml('flujo-edit') +
+      '</div>' +
+      '<div class="sp-footer" style="justify-content:space-between;">' +
+        '<button class="sp-btn" style="color:#c0392b;background:#fff;border:1px solid #c0392b;" id="flujo-edit-delete">Delete</button>' +
+        '<div style="display:flex;gap:8px;">' +
+          '<button class="sp-btn sp-btn-cancel" id="flujo-edit-cancel">Cancelar</button>' +
+          '<button class="sp-btn sp-btn-submit" id="flujo-edit-guardar">Guardar</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+  '</div>' +
+  /* Panel seleccionar condición */
+  '<div id="flujo-cond-picker-overlay" class="side-panel-overlay">' +
+    '<div class="side-panel" style="width:520px;">' +
+      '<div class="side-panel-header"><div class="side-panel-title">Seleccionar una condición</div><button class="side-panel-close" id="flujo-cond-picker-close"><i class="ti ti-x"></i></button></div>' +
+      '<div class="search-box" style="margin-bottom:6px;flex:none;"><i class="ti ti-search"></i><input id="flujo-cond-picker-search" placeholder="Buscar"></div>' +
+      '<div id="flujo-cond-picker-list"></div>' +
+    '</div>' +
+  '</div>' +
+  /* Panel editar condición (genérico + cron) */
+  '<div id="flujo-cond-edit-overlay" class="side-panel-overlay">' +
+    '<div class="side-panel">' +
+      '<div class="side-panel-header"><div class="side-panel-title" id="flujo-cond-edit-title">Condición</div><button class="side-panel-close" id="flujo-cond-edit-close"><i class="ti ti-x"></i></button></div>' +
+      '<div id="flujo-cond-edit-fields"></div>' +
+      '<div class="sp-footer" style="justify-content:space-between;">' +
+        '<button class="sp-btn" style="color:#c0392b;background:#fff;border:1px solid #c0392b;" id="flujo-cond-edit-delete">Delete</button>' +
+        '<div style="display:flex;gap:8px;">' +
+          '<button class="sp-btn sp-btn-cancel" id="flujo-cond-edit-cancel">Cancelar</button>' +
+          '<button class="sp-btn sp-btn-submit" id="flujo-cond-edit-guardar">Guardar</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+  '</div>' +
+  /* Panel seleccionar acción */
+  '<div id="flujo-accion-picker-overlay" class="side-panel-overlay">' +
+    '<div class="side-panel" style="width:520px;">' +
+      '<div class="side-panel-header"><div class="side-panel-title">Seleccionar una acción</div><button class="side-panel-close" id="flujo-accion-picker-close"><i class="ti ti-x"></i></button></div>' +
+      '<div class="search-box" style="margin-bottom:6px;flex:none;"><i class="ti ti-search"></i><input id="flujo-accion-picker-search" placeholder="Buscar"></div>' +
+      '<div id="flujo-accion-picker-list"></div>' +
+    '</div>' +
+  '</div>' +
+  '</div>';
+}
+
+/* ===================== FLUJOS: DESTINO (Aplicar a) ===================== */
+var FLUJO_APLICARA_OPTS = ['Todos los Workspaces','Workspaces','Grupos de workspaces','Grupos de reporte'];
+
+function flujoAplicaraSelectHtml(idAplicara){
+  return '<select class="sp-select" id="' + idAplicara + '">' +
+    FLUJO_APLICARA_OPTS.map(function(o){ return '<option value="' + o + '">' + o + '</option>'; }).join('') +
+  '</select>';
+}
+
+/* Contenedor del selector de objetivos específicos (workspaces / grupos de
+   workspaces / grupos de reporte), que se muestra u oculta según lo elegido
+   en "Aplicar a". idPrefix identifica el panel (flujo-nuevo / flujo-edit). */
+function flujoTargetPickerHtml(idPrefix){
+  return '<div id="' + idPrefix + '-target-wrap" style="margin-top:14px;display:none;">' +
+    '<div class="sp-label" id="' + idPrefix + '-target-label">Seleccionar</div>' +
+    '<div id="' + idPrefix + '-target-list" style="display:flex;flex-direction:column;gap:6px;max-height:180px;overflow-y:auto;border:0.5px solid #e0dfd8;border-radius:6px;padding:10px 12px;"></div>' +
+  '</div>';
+}
+
+function flujoTargetOptionsFor(aplicarA){
+  if (aplicarA === 'Workspaces') return masterWorkspaces.map(function(w){ return w.fqdn; });
+  if (aplicarA === 'Grupos de workspaces') return Object.keys(groupMembership);
+  if (aplicarA === 'Grupos de reporte') return GRUPOS_REPORTE_OPTS.map(function(g){ return g.label; });
+  return [];
+}
+
+function flujoTargetLabelFor(aplicarA){
+  if (aplicarA === 'Workspaces') return 'Workspaces';
+  if (aplicarA === 'Grupos de workspaces') return 'Grupos de workspaces';
+  if (aplicarA === 'Grupos de reporte') return 'Grupos de reporte';
+  return 'Seleccionar';
+}
+
+/* Muestra/oculta y rellena el selector de objetivos según el valor actual
+   de "Aplicar a". seleccionActual es el array de nombres ya elegidos. */
+function renderFlujoTargetPicker(idPrefix, aplicarA, seleccionActual){
+  var wrap = document.getElementById(idPrefix + '-target-wrap');
+  var list = document.getElementById(idPrefix + '-target-list');
+  var label = document.getElementById(idPrefix + '-target-label');
+  if (!wrap || !list) return;
+  var opts = flujoTargetOptionsFor(aplicarA);
+  if (opts.length === 0){ wrap.style.display = 'none'; return; }
+  label.textContent = flujoTargetLabelFor(aplicarA);
+  var seleccion = seleccionActual || [];
+  list.innerHTML = opts.map(function(o){
+    var checked = seleccion.indexOf(o) !== -1;
+    return '<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">' +
+      '<input type="checkbox" class="' + idPrefix + '-target-cb" value="' + o + '"' + (checked ? ' checked' : '') + ' style="accent-color:#f5813e;width:15px;height:15px;"> ' + o + '</label>';
+  }).join('');
+  wrap.style.display = 'block';
+}
+
+function flujoTargetSeleccionActual(idPrefix){
+  return Array.prototype.slice.call(document.querySelectorAll('.' + idPrefix + '-target-cb:checked')).map(function(cb){ return cb.value; });
+}
+
+function flujoToolbarHtml(tab){
+  var f = flujosData[flujoDetailState.index];
+  var habilitarTxt = f.habilitado ? 'Deshabilitar flujo' : 'Habilitar flujo';
+  var habilitarIcon = f.habilitado ? 'ti-bolt-off' : 'ti-bolt';
+  if (tab === 'flujo' && flujoEditState.editing){
+    return '<div class="toolbar" style="padding:0 0 12px;background:transparent;border:none;">' +
+      '<div class="btn-tool" id="flujo-habilitar-btn"><i class="ti ' + habilitarIcon + '"></i> ' + habilitarTxt + '</div>' +
+      '<div class="btn-tool" id="flujo-guardar-btn"><i class="ti ti-device-floppy"></i> Guardar</div>' +
+      '<div class="btn-tool" id="flujo-cancelar-btn"><i class="ti ti-x"></i> Cancelar</div>' +
+      '<div class="btn-tool" id="flujo-eliminar-btn" style="color:#c0392b;"><i class="ti ti-trash"></i> Eliminar</div>' +
+    '</div>';
+  }
+  return '<div class="toolbar" style="padding:0 0 12px;background:transparent;border:none;">' +
+    '<div class="btn-tool" id="flujo-habilitar-btn"><i class="ti ' + habilitarIcon + '"></i> ' + habilitarTxt + '</div>' +
+    '<div class="btn-tool" id="' + (tab === 'flujo' ? 'flujo-canvas-editar-btn' : 'flujo-editar-btn') + '"><i class="ti ti-pencil"></i> Editar</div>' +
+    '<div class="btn-tool" id="flujo-eliminar-btn" style="color:#c0392b;"><i class="ti ti-trash"></i> Eliminar</div>' +
+  '</div>';
+}
+
+function wireFlujoDetail(){
+  var back = document.getElementById('flujo-det-back');
+  if (back) back.addEventListener('click', function(){ goPage('flujos'); });
+
+  renderFlujoTab('general');
+
+  document.querySelectorAll('[data-flujo-tab]').forEach(function(el){
+    el.addEventListener('click', function(){
+      document.querySelectorAll('[data-flujo-tab]').forEach(function(x){ x.classList.remove('active'); });
+      el.classList.add('active');
+      flujoDetailState.activeTab = el.dataset.flujoTab;
+      renderFlujoTab(el.dataset.flujoTab);
+    });
+  });
+
+  /* ---- Panel editar visión general ---- */
+  var editOverlay = document.getElementById('flujo-edit-overlay');
+  function openFlujoEdit(){
+    var f = flujosData[flujoDetailState.index];
+    document.getElementById('flujo-edit-nombre').value = f.nombre;
+    document.getElementById('flujo-edit-desc').value = f.descripcion;
+    document.getElementById('flujo-edit-tipo').value = f.tipo;
+    document.getElementById('flujo-edit-slider').value = f.tiempoReutilizacionH;
+    document.getElementById('flujo-edit-slider-label').textContent = f.tiempoReutilizacionH + ' h';
+    document.getElementById('flujo-edit-solodeteccion').checked = f.soloDeteccion;
+    setToggleVisual('flujo-edit-notif','flujo-edit-notif-track', f.notificacionActiva);
+    document.getElementById('flujo-edit-notif-label').textContent = f.notificacionActiva ? 'Activo' : 'Inactivo';
+    document.getElementById('flujo-edit-aplicara').value = f.aplicarA;
+    renderFlujoTargetPicker('flujo-edit', f.aplicarA, f.targets || []);
+    editOverlay.classList.add('open');
+    updateFlujoEditLiveToken();
+  }
+  function closeFlujoEdit(){ editOverlay.classList.remove('open'); refreshPageToken(); }
+  document.getElementById('flujo-edit-close').addEventListener('click', closeFlujoEdit);
+  document.getElementById('flujo-edit-cancel').addEventListener('click', closeFlujoEdit);
+  document.getElementById('flujo-edit-delete').addEventListener('click', closeFlujoEdit);
+  editOverlay.addEventListener('click', function(e){ if (e.target === this) closeFlujoEdit(); });
+  function updateFlujoEditLiveToken(){
+    var live = flujoLiveState({
+      nombre: document.getElementById('flujo-edit-nombre').value,
+      descripcion: document.getElementById('flujo-edit-desc').value,
+      tipo: document.getElementById('flujo-edit-tipo').value,
+      tiempoReutilizacionH: parseInt(document.getElementById('flujo-edit-slider').value, 10),
+      soloDeteccion: document.getElementById('flujo-edit-solodeteccion').checked,
+      notificacionActiva: editNotifCb.checked,
+      aplicarA: document.getElementById('flujo-edit-aplicara').value,
+      targets: flujoTargetSeleccionActual('flujo-edit')
+    });
+    var key = flujoStateKey(live);
+    updateGlobalToken(key);
+  }
+  ['flujo-edit-nombre','flujo-edit-desc'].forEach(function(id){
+    document.getElementById(id).addEventListener('input', updateFlujoEditLiveToken);
+  });
+  document.getElementById('flujo-edit-tipo').addEventListener('change', updateFlujoEditLiveToken);
+  document.getElementById('flujo-edit-aplicara').addEventListener('change', function(){
+    renderFlujoTargetPicker('flujo-edit', this.value, []);
+    updateFlujoEditLiveToken();
+  });
+  document.getElementById('flujo-edit-target-list').addEventListener('change', function(e){
+    if (e.target.classList.contains('flujo-edit-target-cb')) updateFlujoEditLiveToken();
+  });
+  document.getElementById('flujo-edit-solodeteccion').addEventListener('change', updateFlujoEditLiveToken);
+  document.getElementById('flujo-edit-slider').addEventListener('input', function(){
+    document.getElementById('flujo-edit-slider-label').textContent = this.value + ' h';
+    updateFlujoEditLiveToken();
+  });
+  var editNotifCb = document.getElementById('flujo-edit-notif');
+  editNotifCb.addEventListener('change', function(){
+    setToggleVisual('flujo-edit-notif','flujo-edit-notif-track', editNotifCb.checked);
+    document.getElementById('flujo-edit-notif-label').textContent = editNotifCb.checked ? 'Activo' : 'Inactivo';
+    updateFlujoEditLiveToken();
+  });
+  document.getElementById('flujo-edit-guardar').addEventListener('click', function(){
+    var f = flujosData[flujoDetailState.index];
+    var nombre = document.getElementById('flujo-edit-nombre').value.trim();
+    var desc = document.getElementById('flujo-edit-desc').value.trim();
+    if (!nombre || !desc){ alert('Nombre y Descripción son obligatorios.'); return; }
+    var aplicarA = document.getElementById('flujo-edit-aplicara').value;
+    var targets = flujoTargetSeleccionActual('flujo-edit');
+    if (flujoTargetOptionsFor(aplicarA).length > 0 && targets.length === 0){
+      alert('Selecciona al menos un objetivo para "' + aplicarA + '".');
+      return;
+    }
+    f.nombre = nombre; f.descripcion = desc;
+    f.tipo = document.getElementById('flujo-edit-tipo').value;
+    f.tiempoReutilizacionH = parseInt(document.getElementById('flujo-edit-slider').value, 10);
+    f.soloDeteccion = document.getElementById('flujo-edit-solodeteccion').checked;
+    f.notificacionActiva = editNotifCb.checked;
+    f.aplicarA = aplicarA;
+    f.targets = targets;
+    f.fechaActualizacion = '8/9/26, 12:00:00';
+    closeFlujoEdit();
+    goPage('flujodetail');
+  });
+
+  /* Delegado: botones Editar (visión general), Habilitar, Eliminar renderizados dentro de flujo-tab-content */
+  document.getElementById('flujo-tab-content').addEventListener('click', function(e){
+    if (e.target.closest && e.target.closest('#flujo-editar-btn')) openFlujoEdit();
+    if (e.target.closest && e.target.closest('#flujo-habilitar-btn')){
+      var f = flujosData[flujoDetailState.index];
+      f.habilitado = !f.habilitado;
+      renderFlujoTab(flujoDetailState.activeTab);
+    }
+    if (e.target.closest && e.target.closest('#flujo-eliminar-btn')){
+      if (confirm('¿Eliminar este flujo?')){
+        flujosData.splice(flujoDetailState.index, 1);
+        goPage('flujos');
+      }
+    }
+    if (e.target.closest && e.target.closest('#flujo-canvas-editar-btn')){
+      flujoEditState = { editing: true, nodosBuffer: flujosData[flujoDetailState.index].nodos.slice() };
+      renderFlujoTab('flujo');
+    }
+    if (e.target.closest && e.target.closest('#flujo-guardar-btn')){
+      flujosData[flujoDetailState.index].nodos = flujoEditState.nodosBuffer.slice();
+      flujosData[flujoDetailState.index].fechaActualizacion = '8/9/26, 12:00:00';
+      flujoEditState = { editing: false, nodosBuffer: [] };
+      renderFlujoTab('flujo');
+    }
+    if (e.target.closest && e.target.closest('#flujo-cancelar-btn')){
+      flujoEditState = { editing: false, nodosBuffer: [] };
+      renderFlujoTab('flujo');
+    }
+    if (e.target.closest && e.target.closest('#flujo-add-cond-btn')){
+      openCondPicker();
+    }
+    if (e.target.closest && e.target.closest('#flujo-plus-btn')){
+      var menu = document.getElementById('flujo-plus-menu');
+      if (menu) menu.style.display = (menu.style.display === 'none' ? 'block' : 'none');
+    }
+    if (e.target.closest && e.target.closest('#flujo-plus-menu-cond')){
+      document.getElementById('flujo-plus-menu').style.display = 'none';
+      openCondPicker();
+    }
+    if (e.target.closest && e.target.closest('#flujo-plus-menu-accion')){
+      document.getElementById('flujo-plus-menu').style.display = 'none';
+      openAccionPicker();
+    }
+    var removeBtn = e.target.closest && e.target.closest('[data-remove-node]');
+    if (removeBtn){
+      var idx = parseInt(removeBtn.dataset.removeNode, 10);
+      flujoEditState.nodosBuffer.splice(idx, 1);
+      renderFlujoTab('flujo');
+    }
+  });
+
+  /* ---- Panel seleccionar condición ---- */
+  var condPickerOverlay = document.getElementById('flujo-cond-picker-overlay');
+  function renderCondPickerList(filter){
+    filter = (filter || '').toLowerCase();
+    var list = CONDICION_TIPOS.filter(function(c){ return c.nombre.toLowerCase().indexOf(filter) !== -1; });
+    document.getElementById('flujo-cond-picker-list').innerHTML = list.map(function(c){
+      return '<div class="flujo-picker-item" data-cond-id="' + c.id + '" style="display:flex;gap:12px;padding:12px 4px;border-bottom:0.5px solid #eee;cursor:pointer;">' +
+        '<i class="ti ' + c.icon + '" style="font-size:24px;color:' + c.color + ';flex-shrink:0;margin-top:2px;"></i>' +
+        '<div><div style="font-size:13px;font-weight:600;color:#222;">' + c.nombre + '</div><div style="font-size:12px;color:#888;margin-top:2px;">' + c.desc + '</div></div>' +
+      '</div>';
+    }).join('');
+    document.querySelectorAll('#flujo-cond-picker-list [data-cond-id]').forEach(function(el){
+      el.addEventListener('click', function(){
+        condPickerOverlay.classList.remove('open');
+        openCondEditPanel(el.dataset.condId);
+      });
+    });
+  }
+  function openCondPicker(){
+    document.getElementById('flujo-cond-picker-search').value = '';
+    renderCondPickerList('');
+    condPickerOverlay.classList.add('open');
+  }
+  document.getElementById('flujo-cond-picker-close').addEventListener('click', function(){ condPickerOverlay.classList.remove('open'); });
+  condPickerOverlay.addEventListener('click', function(e){ if (e.target === this) condPickerOverlay.classList.remove('open'); });
+  document.getElementById('flujo-cond-picker-search').addEventListener('input', function(){ renderCondPickerList(this.value); });
+
+  /* ---- Panel seleccionar acción ---- */
+  var accionPickerOverlay = document.getElementById('flujo-accion-picker-overlay');
+  function renderAccionPickerList(filter){
+    filter = (filter || '').toLowerCase();
+    var list = ACCION_CATALOGO.filter(function(a){ return a.nombre.toLowerCase().indexOf(filter) !== -1; });
+    document.getElementById('flujo-accion-picker-list').innerHTML = list.map(function(a, i){
+      return '<div class="flujo-picker-item" data-accion-idx="' + ACCION_CATALOGO.indexOf(a) + '" style="display:flex;gap:12px;padding:12px 4px;border-bottom:0.5px solid #eee;cursor:pointer;">' +
+        '<i class="ti ' + a.icon + '" style="font-size:24px;color:' + a.color + ';flex-shrink:0;margin-top:2px;"></i>' +
+        '<div><div style="font-size:13px;font-weight:600;color:#222;">' + a.nombre + '</div><div style="font-size:12px;color:#888;margin-top:2px;">' + a.desc + '</div></div>' +
+      '</div>';
+    }).join('');
+    document.querySelectorAll('#flujo-accion-picker-list [data-accion-idx]').forEach(function(el){
+      el.addEventListener('click', function(){
+        var a = ACCION_CATALOGO[parseInt(el.dataset.accionIdx, 10)];
+        flujoEditState.nodosBuffer.push({ tipo:'accion', nombre:a.nombre, icon:a.icon, color:a.color, desc:'' });
+        accionPickerOverlay.classList.remove('open');
+        renderFlujoTab('flujo');
+      });
+    });
+  }
+  function openAccionPicker(){
+    document.getElementById('flujo-accion-picker-search').value = '';
+    renderAccionPickerList('');
+    accionPickerOverlay.classList.add('open');
+  }
+  document.getElementById('flujo-accion-picker-close').addEventListener('click', function(){ accionPickerOverlay.classList.remove('open'); });
+  accionPickerOverlay.addEventListener('click', function(e){ if (e.target === this) accionPickerOverlay.classList.remove('open'); });
+  document.getElementById('flujo-accion-picker-search').addEventListener('input', function(){ renderAccionPickerList(this.value); });
+
+  /* ---- Panel editar condición (genérico + cron) ---- */
+  var condEditOverlay = document.getElementById('flujo-cond-edit-overlay');
+  var currentCondId = null;
+  var cronState = null;
+
+  function openCondEditPanel(condId){
+    currentCondId = condId;
+    var ct = condicionTipoById(condId);
+    document.getElementById('flujo-cond-edit-title').textContent = ct.nombre;
+    var fieldsEl = document.getElementById('flujo-cond-edit-fields');
+    var comprobarCadaOpts = COMPROBAR_CADA_OPTS.map(function(o){ return '<option value="' + o + '">' + o + '</option>'; }).join('');
+    var operadorOpts = ct.operadores.map(function(o){ return '<option value="' + o + '">' + o + '</option>'; }).join('');
+
+    if (ct.esCron){
+      cronState = nuevoCronBuilderState();
+      fieldsEl.innerHTML =
+        '<div class="sp-label">Comprobar cada <span class="req">*</span></div>' +
+        '<select class="sp-select" id="fce-comprobarcada"><option value="">Seleccionar una opción</option>' + comprobarCadaOpts + '</select>' +
+        '<div class="sp-label">Operador <span class="req">*</span></div>' +
+        '<select class="sp-select" id="fce-cron-operador"><option value="En" selected>En</option></select>' +
+        '<div class="sp-label">Valor <span class="req">*</span></div>' +
+        '<div id="fce-cron-accordion-header" style="border:1px solid #ccc;border-radius:6px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;font-size:13px;color:#333;">' +
+          '<span id="fce-cron-summary-text">A las 02:00</span><i class="ti ti-chevron-down" id="fce-cron-chevron"></i>' +
+        '</div>' +
+        '<div id="fce-cron-accordion-body" style="display:none;border:1px solid #ccc;border-top:none;border-radius:0 0 6px 6px;padding:14px;margin-bottom:14px;">' +
+          '<div class="sp-label" style="margin-top:0;">Hora de inicio: <span class="req">*</span></div>' +
+          '<input type="time" class="sp-input" id="fce-cron-horainicio" value="02:00" style="max-width:160px;">' +
+          '<div style="border-top:0.5px solid #e0dfd8;margin:14px 0;"></div>' +
+          '<div style="display:grid;grid-template-columns:130px 1fr;gap:14px;">' +
+            '<div>' +
+              '<label style="display:block;margin-bottom:10px;font-size:13px;cursor:pointer;"><input type="radio" name="fce-cron-patron" value="diario" checked> Diario</label>' +
+              '<label style="display:block;margin-bottom:10px;font-size:13px;cursor:pointer;"><input type="radio" name="fce-cron-patron" value="semanal"> Semanal</label>' +
+              '<label style="display:block;margin-bottom:10px;font-size:13px;cursor:pointer;"><input type="radio" name="fce-cron-patron" value="mensual"> Mensual</label>' +
+              '<label style="display:block;margin-bottom:10px;font-size:13px;cursor:pointer;"><input type="radio" name="fce-cron-patron" value="intervalo"> Intervalo</label>' +
+              '<label style="display:block;margin-bottom:10px;font-size:13px;cursor:pointer;"><input type="radio" name="fce-cron-patron" value="personalizado"> Cron personalizado</label>' +
+            '</div>' +
+            '<div id="fce-cron-patron-detail" style="border-left:1px solid #e0dfd8;padding-left:14px;"></div>' +
+          '</div>' +
+        '</div>';
+
+      document.getElementById('fce-cron-accordion-header').addEventListener('click', function(){
+        var body = document.getElementById('fce-cron-accordion-body');
+        var open = body.style.display !== 'none';
+        body.style.display = open ? 'none' : 'block';
+        document.getElementById('fce-cron-chevron').className = 'ti ' + (open ? 'ti-chevron-down' : 'ti-chevron-up');
+      });
+      document.getElementById('fce-cron-horainicio').addEventListener('change', function(){
+        cronState.horaInicio = this.value;
+        updateCronSummaryText();
+      });
+      document.querySelectorAll('input[name="fce-cron-patron"]').forEach(function(radio){
+        radio.addEventListener('change', function(){
+          cronState.patron = this.value;
+          renderCronPatronDetail();
+          updateCronSummaryText();
+        });
+      });
+      renderCronPatronDetail();
+      updateCronSummaryText();
+    } else {
+      fieldsEl.innerHTML =
+        '<div class="sp-label">Comprobar cada <span class="req">*</span></div>' +
+        '<select class="sp-select" id="fce-comprobarcada"><option value="">Seleccionar una opción</option>' + comprobarCadaOpts + '</select>' +
+        '<div class="sp-label">Operador <span class="req">*</span></div>' +
+        '<select class="sp-select" id="fce-operador"><option value="">Seleccionar un operador</option>' + operadorOpts + '</select>' +
+        '<div class="sp-label">Valor <span class="req">*</span></div>' +
+        '<input class="sp-input" id="fce-valor" placeholder="Introducir valor">' +
+        (ct.tienePeriodo ?
+          '<div class="sp-label">Período <span class="req">*</span></div>' +
+          '<select class="sp-select" id="fce-periodo"><option value="">Seleccionar una opción</option>' +
+          PERIODO_OPTS.map(function(o){ return '<option value="' + o + '">' + o + '</option>'; }).join('') + '</select>'
+        : '');
+    }
+    condEditOverlay.classList.add('open');
+  }
+
+  function renderCronPatronDetail(){
+    var el = document.getElementById('fce-cron-patron-detail');
+    if (cronState.patron === 'diario'){
+      el.innerHTML =
+        '<label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:10px;flex-wrap:wrap;"><input type="radio" name="fce-diario-modo" value="cada" checked> Cada <input type="number" min="1" id="fce-diario-cada" value="1" style="width:50px;padding:4px;border:1px solid #ccc;border-radius:4px;"> día(s) <span class="req">*</span></label>' +
+        '<label style="display:flex;align-items:center;gap:8px;font-size:13px;"><input type="radio" name="fce-diario-modo" value="lv"> De lunes a viernes</label>';
+      document.querySelectorAll('input[name="fce-diario-modo"]').forEach(function(r){
+        r.addEventListener('change', function(){ cronState.diario.modo = this.value; updateCronSummaryText(); });
+      });
+      var cadaInput = document.getElementById('fce-diario-cada');
+      if (cadaInput) cadaInput.addEventListener('input', function(){ cronState.diario.cadaDias = parseInt(this.value, 10) || 1; updateCronSummaryText(); });
+    } else if (cronState.patron === 'semanal'){
+      el.innerHTML = '<div style="font-size:13px;margin-bottom:8px;">Recurrente cada</div>' +
+        DIAS_SEMANA_CRON.map(function(d){
+          return '<label style="display:flex;align-items:center;gap:6px;font-size:13px;margin-bottom:6px;cursor:pointer;"><input type="checkbox" class="fce-semanal-dia" value="' + d + '" style="accent-color:#f5813e;"> ' + d + '</label>';
+        }).join('');
+      document.querySelectorAll('.fce-semanal-dia').forEach(function(cb){
+        cb.addEventListener('change', function(){
+          cronState.semanal.dias = Array.prototype.slice.call(document.querySelectorAll('.fce-semanal-dia:checked')).map(function(x){ return x.value; });
+          updateCronSummaryText();
+        });
+      });
+    } else if (cronState.patron === 'mensual'){
+      el.innerHTML = '<div class="sp-label" style="margin-top:0;">Día del mes</div><input type="number" min="1" max="31" id="fce-mensual-dia" value="1" style="width:70px;padding:4px;border:1px solid #ccc;border-radius:4px;">';
+      document.getElementById('fce-mensual-dia').addEventListener('input', function(){ cronState.mensual.diaMes = parseInt(this.value, 10) || 1; updateCronSummaryText(); });
+    } else if (cronState.patron === 'intervalo'){
+      el.innerHTML = '<div class="sp-label" style="margin-top:0;">Cada</div><input type="number" min="1" id="fce-intervalo-horas" value="1" style="width:60px;padding:4px;border:1px solid #ccc;border-radius:4px;"> horas';
+      document.getElementById('fce-intervalo-horas').addEventListener('input', function(){ cronState.intervalo.horas = parseInt(this.value, 10) || 1; updateCronSummaryText(); });
+    } else if (cronState.patron === 'personalizado'){
+      el.innerHTML = '<div class="sp-label" style="margin-top:0;">Expresión cron</div><input class="sp-input" id="fce-personalizado-expr" placeholder="* * * * *">';
+      document.getElementById('fce-personalizado-expr').addEventListener('input', function(){ cronState.personalizado.expresion = this.value; updateCronSummaryText(); });
+    }
+  }
+  function updateCronSummaryText(){
+    var txt = document.getElementById('fce-cron-summary-text');
+    if (txt) txt.textContent = buildCronSummary(cronState);
+  }
+
+  function closeCondEdit(){ condEditOverlay.classList.remove('open'); }
+  document.getElementById('flujo-cond-edit-close').addEventListener('click', closeCondEdit);
+  document.getElementById('flujo-cond-edit-cancel').addEventListener('click', closeCondEdit);
+  document.getElementById('flujo-cond-edit-delete').addEventListener('click', closeCondEdit);
+  condEditOverlay.addEventListener('click', function(e){ if (e.target === this) closeCondEdit(); });
+
+  document.getElementById('flujo-cond-edit-guardar').addEventListener('click', function(){
+    var ct = condicionTipoById(currentCondId);
+    var comprobarCada = document.getElementById('fce-comprobarcada').value;
+    if (!comprobarCada){ alert('Comprobar cada es obligatorio.'); return; }
+    var nodo = { tipo:'condicion', condId: currentCondId, comprobarCada: comprobarCada };
+    if (ct.esCron){
+      nodo.operador = 'En';
+      nodo.cronState = JSON.parse(JSON.stringify(cronState));
+      nodo.cronResumen = buildCronSummary(cronState);
+    } else {
+      var operador = document.getElementById('fce-operador').value;
+      var valor = document.getElementById('fce-valor').value.trim();
+      if (!operador || !valor){ alert('Operador y Valor son obligatorios.'); return; }
+      nodo.operador = operador;
+      nodo.valor = valor;
+      if (ct.tienePeriodo){
+        var periodo = document.getElementById('fce-periodo').value;
+        if (!periodo){ alert('Período es obligatorio.'); return; }
+        nodo.periodo = periodo;
+      }
+    }
+    flujoEditState.nodosBuffer.push(nodo);
+    closeCondEdit();
+    renderFlujoTab('flujo');
+  });
+}
+
+function renderFlujoTab(tab){
+  var el = document.getElementById('flujo-tab-content');
+  if (!el) return;
+  var f = flujosData[flujoDetailState.index];
+
+  if (tab === 'general'){
+    el.innerHTML = flujoToolbarHtml('general') +
+      '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">' +
+        '<div style="background:#fff;border:0.5px solid #e0dfd8;border-radius:8px;padding:14px 16px;display:flex;align-items:flex-start;gap:10px;"><i class="ti ' + (f.habilitado?'ti-bolt':'ti-bolt-off') + '" style="font-size:18px;color:#888;margin-top:2px;"></i><div><div class="gws-field-label">' + (f.habilitado?'Habilitado':'Deshabilitado') + '</div><div style="font-size:13px;color:#222;font-weight:500;">' + (f.habilitado?'Deshabilitado':'Deshabilitado') + '</div></div></div>' +
+        '<div style="background:#fff;border:0.5px solid #e0dfd8;border-radius:8px;padding:14px 16px;display:flex;align-items:flex-start;gap:10px;"><i class="ti ti-calendar" style="font-size:18px;color:#888;margin-top:2px;"></i><div><div class="gws-field-label">Creado el</div><div style="font-size:13px;color:#222;font-weight:500;">' + f.creadoEl + '</div></div></div>' +
+        '<div style="background:#fff;border:0.5px solid #e0dfd8;border-radius:8px;padding:14px 16px;display:flex;align-items:flex-start;gap:10px;"><i class="ti ti-calendar" style="font-size:18px;color:#888;margin-top:2px;"></i><div><div class="gws-field-label">Fecha de actualización</div><div style="font-size:13px;color:#222;font-weight:500;">' + f.fechaActualizacion + '</div></div></div>' +
+      '</div>' +
+      '<div class="wsd-block-title" style="margin-top:0;">Visión general</div>' +
+      '<div class="gws-card" style="margin-bottom:16px;"><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;">' +
+        '<div><div class="gws-field-label">Descripción</div><div class="gws-field-value" style="margin-bottom:0;">' + f.descripcion + '</div></div>' +
+        '<div><div class="gws-field-label">Tipo</div><div class="gws-field-value" style="margin-bottom:0;">' + f.tipo + '</div></div>' +
+        '<div><div class="gws-field-label">Versión</div><div class="gws-field-value" style="margin-bottom:0;">' + f.version + '</div></div>' +
+        '<div><div class="gws-field-label">Tiempo de reutilización</div><div class="gws-field-value" style="margin-bottom:0;">' + f.tiempoReutilizacionH + 'h 0m 0s</div></div>' +
+        '<div><div class="gws-field-label">Solo detección</div><div class="gws-field-value" style="margin-bottom:0;">' + (f.soloDeteccion ? 'Sí' : 'No') + '</div></div>' +
+      '</div></div>' +
+      '<div class="wsd-block-title">Notificación</div>' +
+      '<div class="gws-card" style="margin-bottom:16px;"><div class="gws-field-label">Notificación de usuario</div><div class="gws-field-value" style="margin-bottom:0;">' + (f.notificacionActiva ? 'Activo' : 'Inactivo') + '</div></div>' +
+      '<div class="wsd-block-title">Destino</div>' +
+      '<div class="gws-card">' +
+        '<div class="gws-field-label">Aplicar a</div><div class="gws-field-value">' + f.aplicarA + '</div>' +
+        (flujoTargetOptionsFor(f.aplicarA).length > 0 ?
+          '<div class="gws-field-label" style="margin-top:14px;">' + flujoTargetLabelFor(f.aplicarA) + '</div><div style="font-size:13px;color:#2563eb;margin-bottom:14px;">' + (f.targets||[]).join(', ') + '</div>' +
+          '<div style="background:#fff8e6;border:0.5px solid #f0dca0;border-radius:6px;padding:10px 12px;font-size:12px;color:#7a5c00;display:flex;gap:8px;"><i class="ti ti-info-circle" style="flex-shrink:0;margin-top:1px;"></i>El flujo aplicará a los workspaces de otros tenants solo si el microservicio seleccionado también está habilitado para esos tenants.</div>'
+        : '') +
+      '</div>';
+  }
+  else if (tab === 'notificacion'){
+    el.innerHTML = flujoToolbarHtml('notificacion') +
+      '<div class="wsd-block-title" style="margin-top:0;">Notificación</div>' +
+      '<div class="gws-card"><div class="gws-field-label">Notificación de usuario</div><div class="gws-field-value" style="margin-bottom:0;">' + (f.notificacionActiva ? 'Activo' : 'Inactivo') + '</div></div>';
+  }
+  else if (tab === 'destino'){
+    el.innerHTML = flujoToolbarHtml('destino') +
+      '<div class="wsd-block-title" style="margin-top:0;">Destino</div>' +
+      '<div class="gws-card">' +
+        '<div class="gws-field-label">Aplicar a</div><div class="gws-field-value">' + f.aplicarA + '</div>' +
+        (flujoTargetOptionsFor(f.aplicarA).length > 0 ?
+          '<div class="gws-field-label" style="margin-top:14px;">' + flujoTargetLabelFor(f.aplicarA) + '</div><div style="font-size:13px;color:#2563eb;">' + (f.targets||[]).join(', ') + '</div>'
+        : '') +
+      '</div>';
+  }
+  else if (tab === 'flujo'){
+    el.innerHTML = flujoToolbarHtml('flujo') + '<div id="flujo-canvas-wrap"></div>';
+    renderFlujoCanvas();
+  }
+}
+
+function renderFlujoCanvas(){
+  var wrap = document.getElementById('flujo-canvas-wrap');
+  if (!wrap) return;
+  var editing = flujoEditState.editing;
+  var nodos = editing ? flujoEditState.nodosBuffer : flujosData[flujoDetailState.index].nodos;
+
+  var connector = '<div style="height:26px;width:1px;background:#ccc;position:relative;margin:0 auto;">' +
+    '<div style="position:absolute;bottom:-1px;left:-4px;width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:6px solid #ccc;"></div></div>';
+
+  var nodesHtml = nodos.map(function(nodo, i){
+    var titulo = nodoTitulo(nodo), icono = nodoIcono(nodo), color = nodoColor(nodo), resumen = nodoResumenLinea(nodo);
+    var card = '<div style="width:360px;background:#fff;border:1px solid #e0dfd8;border-left:4px solid ' + color + ';border-radius:6px;padding:14px 16px;box-shadow:0 1px 2px rgba(0,0,0,.04);position:relative;">' +
+      '<div style="display:flex;align-items:flex-start;gap:10px;">' +
+        '<i class="ti ' + icono + '" style="font-size:22px;color:' + color + ';margin-top:1px;"></i>' +
+        '<div style="flex:1;font-size:14px;font-weight:600;color:#222;">' + titulo + '</div>' +
+        (editing ? '<i class="ti ti-x" data-remove-node="' + i + '" style="cursor:pointer;color:#999;font-size:15px;"></i>' : '') +
+      '</div>' +
+      (resumen ? '<div style="margin-top:8px;font-size:12px;color:#2563eb;">' + resumen + '</div>' : '') +
+    '</div>';
+    return card + (i < nodos.length - 1 ? connector : '');
+  }).join('');
+
+  var addHtml = '';
+  if (editing){
+    if (nodos.length === 0){
+      addHtml = '<div id="flujo-add-cond-btn" style="width:220px;border:1px dashed #ccc;border-radius:6px;padding:16px;text-align:center;color:#555;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;background:#fff;"><i class="ti ti-plus"></i> Agregar condición</div>';
+    } else {
+      addHtml = connector +
+        '<div style="position:relative;">' +
+          '<div id="flujo-plus-btn" style="width:32px;height:32px;border-radius:50%;border:1px solid #ccc;background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#666;margin:0 auto;"><i class="ti ti-plus"></i></div>' +
+          '<div id="flujo-plus-menu" style="display:none;position:absolute;top:38px;left:50%;transform:translateX(-50%);background:#fff;border:0.5px solid #ccc;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.12);z-index:50;min-width:160px;overflow:hidden;">' +
+            '<div id="flujo-plus-menu-cond" style="padding:10px 14px;font-size:13px;color:#333;cursor:pointer;border-bottom:0.5px solid #eee;">Agregar condición</div>' +
+            '<div id="flujo-plus-menu-accion" style="padding:10px 14px;font-size:13px;color:#333;cursor:pointer;">Agregar acción</div>' +
+          '</div>' +
+        '</div>';
+    }
+  } else if (nodos.length === 0){
+    addHtml = '<div style="color:#999;font-size:13px;text-align:center;padding:40px 0;">Este flujo todavía no tiene condiciones ni acciones configuradas.</div>';
+  }
+
+  wrap.innerHTML = '<div style="background:#fff;border:0.5px solid #e0dfd8;border-radius:8px;min-height:420px;padding:40px 0;display:flex;flex-direction:column;align-items:center;gap:0;background-image:radial-gradient(#e3e1d8 1px, transparent 1px);background-size:16px 16px;">' +
+    nodesHtml + addHtml +
+  '</div>';
 }
 
 function pageInformes(){
@@ -1426,8 +2361,21 @@ function deviceGroupsList(id){
 
 function wsGruposWSHtml(id){
   var groups = deviceGroupsList(id);
-  var rows = groups.map(function(g){ return ['<span class="desc-link">' + g.name + '</span>', '-', g.tipo, String((groupMembership[g.name] || []).length)]; });
+  var rows = groups.map(function(g){ return ['<span class="desc-link ws-grupo-link" data-grupo="' + g.name + '">' + g.name + '</span>', '-', g.tipo, String((groupMembership[g.name] || []).length)]; });
   return simpleSectionHtml(['Nombre','Descripción','Tipo','Workspaces'], rows, 'Este dispositivo no pertenece a ningún grupo de workspaces');
+}
+
+/* Conecta los links de grupo en el detalle de dispositivo */
+function wireWsGrupoLinks(){
+  document.querySelectorAll('.ws-grupo-link').forEach(function(el){
+    el.addEventListener('click', function(e){
+      e.stopPropagation();
+      grupoWSState.activeGroup = el.dataset.grupo;
+      grupoWSState.activeTab = 'detalles';
+      grupoWSState.editingWorkspaces = false;
+      goPage('grupowsdetail');
+    });
+  });
 }
 
 function renderWSDetailSection(section){
@@ -1475,6 +2423,7 @@ function renderWSDetailSection(section){
     content.innerHTML = wsActPendientesHtml(d);
   } else if (section === 'gruposws2'){
     content.innerHTML = wsGruposWSHtml(wsDetailState.deviceId);
+    wireWsGrupoLinks();
   } else {
     content.innerHTML = '<div class="gws-empty"><i class="ti ti-package"></i>Sección en construcción</div>';
   }
@@ -2002,12 +2951,106 @@ function pageActPatches(){
   '<div class="table-wrap"><table><thead><tr><th>KB</th><th>Descripción de revisión</th><th>Clasificación</th><th>Producto</th><th>Fecha de lanzamiento</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div></div>';
 }
 
+/* ===================== DIRECTIVAS DE ACTUALIZACIONES: ESTADO ===================== */
+var DIRECTIVA_BASE = 'Directiva de parches';
+var directivasCreadas = []; /* [{nombre: string}] */
+
+function getAllDirectivasNames(){
+  return [DIRECTIVA_BASE].concat(directivasCreadas.map(function(d){ return d.nombre; }));
+}
+
+function directivaOptionsHtml(selectedValue){
+  var opts = getAllDirectivasNames();
+  return opts.map(function(name){
+    return '<option value="' + name + '"' + (name === selectedValue ? ' selected' : '') + '>' + name + '</option>';
+  }).join('');
+}
+
+/* Qué directiva se está viendo en el detalle */
+var directivaDetailState = { nombre: DIRECTIVA_BASE };
+
+/* Recalcula la clave de la respuesta correcta del ejercicio de "Nuevo destinatario"
+   por si se ha renombrado la directiva base, para que el ejercicio siga siendo
+   resoluble con el nombre actual */
+function recomputeCorrectDestKey(){
+  CORRECT_DEST_KEY = destNuevoStateKey('Equipos de producción', ['xrt'], DIRECTIVA_BASE);
+}
+
+/* Renombra una directiva (la base o una creada) y propaga el cambio a todos los
+   destinatarios que la tengan asignada, y a la clave de la respuesta correcta si aplica */
+function renameDirectiva(oldName, newName){
+  if (oldName === DIRECTIVA_BASE){
+    DIRECTIVA_BASE = newName;
+    recomputeCorrectDestKey();
+  } else {
+    var entry = directivasCreadas.filter(function(d){ return d.nombre === oldName; })[0];
+    if (entry) entry.nombre = newName;
+  }
+  var todosDest = [destPruebaData, destEquiposData].concat(destNuevoEntradas);
+  todosDest.forEach(function(d){ if (d.directiva === oldName) d.directiva = newName; });
+  directivaDetailState.nombre = newName;
+}
+
 function pageActDirectivas(){
+  var rowsCreadas = directivasCreadas.map(function(d, i){
+    return '<tr class="clickable" data-directiva-index="' + i + '"><td class="desc-link">' + d.nombre + '</td><td>\u2014</td><td class="status-ok">\u25cf Habilitado</td></tr>';
+  }).join('');
   return '<div class="page"><div class="page-header">' + enunciadoHtml() + '<div style="font-size:18px;font-weight:600;color:#1a1a1a;margin-bottom:8px;">Directivas de actualizaciones de Microsoft</div></div>' +
-  '<div class="toolbar"><div style="flex:1"></div><div class="search-box"><i class="ti ti-search"></i><input placeholder="Buscar directiva de actualizaciones de Windows..."></div></div>' +
+  '<div class="toolbar"><div class="btn-tool" id="dir-nuevo-btn"><i class="ti ti-plus"></i> Nuevo</div><div style="flex:1"></div><div class="search-box"><i class="ti ti-search"></i><input placeholder="Buscar directiva de actualizaciones de Windows..."></div></div>' +
   '<div class="table-wrap"><table><thead><tr><th>Nombre</th><th>Objetivos de la directiva</th><th>Aprobaciones automáticas</th></tr></thead><tbody>' +
-  '<tr class="clickable" id="directiva-parches-row"><td class="desc-link">Directiva de parches</td><td class="desc-link">Prueba para directiva de actualización</td><td class="status-ok">● Habilitado</td></tr>' +
-  '</tbody></table></div></div>';
+  '<tr class="clickable" id="directiva-parches-row"><td class="desc-link">' + DIRECTIVA_BASE + '</td><td class="desc-link">Prueba para directiva de actualización</td><td class="status-ok">● Habilitado</td></tr>' +
+  rowsCreadas +
+  '</tbody></table></div>' +
+  /* Panel crear nueva directiva */
+  '<div id="dir-nuevo-overlay" class="side-panel-overlay">' +
+    '<div class="side-panel">' +
+      '<div class="side-panel-header">' +
+        '<div class="side-panel-title">Crear nueva directiva de parches</div>' +
+        '<button class="side-panel-close" id="dir-nuevo-close"><i class="ti ti-x"></i></button>' +
+      '</div>' +
+      '<div class="sp-label">Nombre <span class="req">*</span></div>' +
+      '<input class="sp-input" id="dir-nuevo-nombre" placeholder="Introduce el nombre">' +
+      '<div class="sp-footer" style="justify-content:flex-end;gap:8px;">' +
+        '<button class="sp-btn sp-btn-cancel" id="dir-nuevo-cancel"><i class="ti ti-x"></i> Cancelar</button>' +
+        '<button class="sp-btn sp-btn-submit" id="dir-nuevo-submit"><i class="ti ti-plus"></i> Nuevo</button>' +
+      '</div>' +
+    '</div>' +
+  '</div>' +
+  '</div>';
+}
+
+function wireActDirectivas(){
+  var dirRow = document.getElementById('directiva-parches-row');
+  if (dirRow) dirRow.addEventListener('click', function(){
+    directivaDetailState.nombre = DIRECTIVA_BASE;
+    goPage('actdirectivadetail');
+  });
+
+  document.querySelectorAll('[data-directiva-index]').forEach(function(tr){
+    tr.addEventListener('click', function(){
+      var idx = parseInt(tr.dataset.directivaIndex, 10);
+      directivaDetailState.nombre = directivasCreadas[idx].nombre;
+      goPage('actdirectivadetail');
+    });
+  });
+
+  var overlay = document.getElementById('dir-nuevo-overlay');
+  document.getElementById('dir-nuevo-btn').addEventListener('click', function(){
+    document.getElementById('dir-nuevo-nombre').value = '';
+    overlay.classList.add('open');
+  });
+  function closeDirNuevo(){ overlay.classList.remove('open'); refreshPageToken(); }
+  document.getElementById('dir-nuevo-close').addEventListener('click', closeDirNuevo);
+  document.getElementById('dir-nuevo-cancel').addEventListener('click', closeDirNuevo);
+  overlay.addEventListener('click', function(e){ if (e.target === this) closeDirNuevo(); });
+
+  document.getElementById('dir-nuevo-submit').addEventListener('click', function(){
+    var nombre = document.getElementById('dir-nuevo-nombre').value.trim();
+    if (!nombre){ alert('El nombre es obligatorio.'); return; }
+    if (getAllDirectivasNames().indexOf(nombre) !== -1){ alert('Ya existe una directiva con ese nombre.'); return; }
+    directivasCreadas.push({ nombre: nombre });
+    goPage('actdirectivas');
+  });
 }
 
 /* Datos de actualizaciones Microsoft para la directiva */
@@ -2042,9 +3085,10 @@ var actNoCatalogadasRows = [
 ];
 
 function pageActDirectivaDetail(){
+  var nombre = directivaDetailState.nombre;
   return '<div class="page"><div class="page-header">' + enunciadoHtml() +
-    '<div class="breadcrumb"><a id="dir-det-back" style="color:#2563eb;cursor:pointer;">Directivas de actualizaciones de Microsoft</a><i class="ti ti-chevron-right" style="font-size:11px;"></i><span style="color:#555;">Directiva de parches</span></div>' +
-    '<div style="font-size:22px;font-weight:700;color:#1a1a1a;margin:6px 0 0;">Directiva de parches</div>' +
+    '<div class="breadcrumb"><a id="dir-det-back" style="color:#2563eb;cursor:pointer;">Directivas de actualizaciones de Microsoft</a><i class="ti ti-chevron-right" style="font-size:11px;"></i><span style="color:#555;">' + nombre + '</span></div>' +
+    '<div style="font-size:22px;font-weight:700;color:#1a1a1a;margin:6px 0 0;">' + nombre + '</div>' +
   '</div>' +
   '<div style="padding:0 20px;padding-bottom:60px;">' +
     '<div class="gws-tabs" id="dir-det-tabs">' +
@@ -2055,7 +3099,25 @@ function pageActDirectivaDetail(){
       '<div class="gws-tab" data-dir-tab="aprobautnocat">Aprobaciones automáticas no catalogadas</div>' +
     '</div>' +
     '<div id="dir-det-content" class="gws-panel"></div>' +
-  '</div></div>';
+  '</div>' +
+  '<div id="dir-edit-overlay" class="side-panel-overlay">' +
+    '<div class="side-panel">' +
+      '<div class="side-panel-header">' +
+        '<div class="side-panel-title">Editar directiva de parches de Microsoft</div>' +
+        '<button class="side-panel-close" id="dir-edit-close"><i class="ti ti-x"></i></button>' +
+      '</div>' +
+      '<div class="sp-label">Nombre <span class="req">*</span></div>' +
+      '<input class="sp-input" id="dir-edit-nombre" value="' + nombre + '">' +
+      '<div class="sp-footer" style="justify-content:space-between;">' +
+        '<button class="sp-btn" style="color:#c0392b;background:#fff;border:1px solid #c0392b;" id="dir-edit-delete">Delete</button>' +
+        '<div style="display:flex;gap:8px;">' +
+          '<button class="sp-btn sp-btn-cancel" id="dir-edit-cancel">Cancelar</button>' +
+          '<button class="sp-btn sp-btn-submit" id="dir-edit-guardar">Guardar</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+  '</div>' +
+  '</div>';
 }
 
 function wireActDirectivaDetail(){
@@ -2069,6 +3131,35 @@ function wireActDirectivaDetail(){
       renderActDirectivaTab(el.dataset.dirTab);
     });
   });
+
+  /* Panel de edición del nombre de la directiva */
+  var editOverlay = document.getElementById('dir-edit-overlay');
+  function openDirEdit(){
+    document.getElementById('dir-edit-nombre').value = directivaDetailState.nombre;
+    editOverlay.classList.add('open');
+  }
+  function closeDirEdit(){ editOverlay.classList.remove('open'); refreshPageToken(); }
+  document.getElementById('dir-edit-close').addEventListener('click', closeDirEdit);
+  document.getElementById('dir-edit-cancel').addEventListener('click', closeDirEdit);
+  document.getElementById('dir-edit-delete').addEventListener('click', closeDirEdit);
+  editOverlay.addEventListener('click', function(e){ if (e.target === this) closeDirEdit(); });
+
+  document.getElementById('dir-edit-guardar').addEventListener('click', function(){
+    var nuevoNombre = document.getElementById('dir-edit-nombre').value.trim();
+    if (!nuevoNombre){ alert('El nombre es obligatorio.'); return; }
+    var oldNombre = directivaDetailState.nombre;
+    if (nuevoNombre !== oldNombre){
+      var otrosNombres = getAllDirectivasNames().filter(function(n){ return n !== oldNombre; });
+      if (otrosNombres.indexOf(nuevoNombre) !== -1){ alert('Ya existe una directiva con ese nombre.'); return; }
+      renameDirectiva(oldNombre, nuevoNombre);
+    }
+    goPage('actdirectivadetail');
+  });
+
+  /* Delegado: el botón Edit se renderiza dentro de dir-det-content */
+  document.getElementById('dir-det-content').addEventListener('click', function(e){
+    if (e.target.closest && e.target.closest('#dir-edit-open-btn')) openDirEdit();
+  });
 }
 
 function renderActDirectivaTab(tab){
@@ -2076,19 +3167,26 @@ function renderActDirectivaTab(tab){
   if (!el) return;
 
   if (tab === 'detalles'){
+    var nombre = directivaDetailState.nombre;
+    var esBase = (nombre === DIRECTIVA_BASE);
+    var todosDest = [destPruebaData, destEquiposData].concat(destNuevoEntradas);
+    var destinatariosQueLaUsan = todosDest.filter(function(d){ return d.directiva === nombre; });
+    var destinatariosRows = destinatariosQueLaUsan.map(function(d){
+      return '<tr><td style="padding:8px 14px;color:#2563eb;border-bottom:0.5px solid #eee;">' + d.nombre + '</td></tr>';
+    }).join('');
     el.innerHTML =
       '<div style="display:grid;grid-template-columns:1fr 220px;gap:20px;">' +
         '<div class="gws-card">' +
           '<div class="gws-field-label">Nombre</div>' +
-          '<div class="gws-field-value" style="margin-bottom:20px;color:#2563eb;">Directiva de parches</div>' +
-          '<div style="text-align:right;"><button class="sp-btn sp-btn-cancel">Edit</button></div>' +
+          '<div class="gws-field-value" style="margin-bottom:20px;color:#2563eb;">' + nombre + '</div>' +
+          '<div style="text-align:right;"><button class="sp-btn sp-btn-cancel" id="dir-edit-open-btn">Edit</button></div>' +
           '<div style="margin-top:16px;"><div class="gws-field-label" style="font-size:13px;font-weight:600;color:#222;margin-bottom:8px;">Destinatarios</div>' +
           '<table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:#eceae3;"><th style="padding:7px 14px;text-align:left;color:#555;border-bottom:0.5px solid #ddd;">Nombre</th></tr></thead>' +
-          '<tbody><tr><td style="padding:8px 14px;color:#2563eb;border-bottom:0.5px solid #eee;">Prueba para directiva de actualización</td></tr></tbody></table></div>' +
+          '<tbody>' + (destinatariosRows || '<tr><td style="padding:8px 14px;color:#999;">Ningún destinatario usa esta directiva todavía</td></tr>') + '</tbody></table></div>' +
         '</div>' +
         '<div>' +
-          '<div class="gws-side-box"><i class="ti ti-calendar" style="color:#f5813e;"></i><div><div class="gws-side-label">Fecha de creación</div><div class="gws-side-value">12/3/25</div></div></div>' +
-          '<div class="gws-side-box"><i class="ti ti-user" style="color:#f5813e;"></i><div><div class="gws-side-label">Creado por</div><div class="gws-side-value">Joan Serra</div></div></div>' +
+          '<div class="gws-side-box"><i class="ti ti-calendar" style="color:#f5813e;"></i><div><div class="gws-side-label">Fecha de creación</div><div class="gws-side-value">' + (esBase ? '12/3/25' : '8/9/26') + '</div></div></div>' +
+          '<div class="gws-side-box"><i class="ti ti-user" style="color:#f5813e;"></i><div><div class="gws-side-label">Creado por</div><div class="gws-side-value">' + (esBase ? 'Joan Serra' : 'Alumno') + '</div></div></div>' +
         '</div>' +
       '</div>';
   }
@@ -2215,29 +3313,380 @@ function renderActDirectivaTab(tab){
   }
 }
 
-function pageActDestinatarios(){
-  return '<div class="page"><div class="page-header">' + enunciadoHtml() + '<div style="font-size:18px;font-weight:600;color:#1a1a1a;margin-bottom:8px;">Destinatarios</div></div>' +
-  '<div class="toolbar"><div class="btn-tool"><i class="ti ti-plus"></i> Nuevo</div><div class="btn-tool"><i class="ti ti-file-export"></i> Exportar</div><div style="flex:1"></div><div class="search-box"><i class="ti ti-search"></i><input placeholder="Buscar por término..."></div></div>' +
-  '<div class="table-wrap"><table><thead><tr><th>Nombre</th><th>Grupos de reporte</th><th>Tiene programación establecida</th></tr></thead><tbody>' +
-  '<tr class="clickable" id="dest-prueba-row"><td class="desc-link">Prueba para directiva de actualización</td><td>RP Training 2</td><td>✓</td></tr>' +
-  '<tr><td class="desc-link">Equipos</td><td>RT, OI, PV</td><td>✓</td></tr>' +
-  '</tbody></table></div></div>';
+/* ===================== DESTINATARIOS — ESTADO Y TOKENS ===================== */
+
+var GRUPOS_REPORTE_OPTS = [
+  {id:'rp2',  label:'RP Training 2',          initials:'R2', color:'#8b2500'},
+  {id:'xrt',  label:'XRTraining',              initials:'X',  color:'#6c3da8'},
+  {id:'upct', label:'UPCT - Departamento TIC', initials:'UT', color:'#c87d30'},
+  {id:'prol', label:'Prueba Rol específico',   initials:'PE', color:'#2f9e7a'},
+  {id:'rpt',  label:'RP Training',             initials:'R1', color:'#2563eb'},
+  {id:'oi',   label:'Oficina Indra',           initials:'OI', color:'#e6d94d'},
+  {id:'rt',   label:'RT',                      initials:'RT', color:'#c87d30'},
+  {id:'oieq', label:'OI',                      initials:'OI', color:'#6c3da8'},
+  {id:'pv',   label:'PV',                      initials:'PV', color:'#c8b400'}
+];
+
+var destNuevoState = { nombre:'', gruposSeleccionados:[], directiva:'' };
+
+function destNuevoStateKey(nombre, grupos, directiva){
+  var gs = (grupos||[]).slice().sort().join(',');
+  return 'destnuevo:' + (nombre||'').trim().toLowerCase() + '|' + gs + '|' + (directiva||'');
 }
 
-/* ===================== DETALLE DESTINATARIO ===================== */
+var CORRECT_DEST_KEY     = destNuevoStateKey('Equipos de producción', ['xrt'], DIRECTIVA_BASE);
+var TOKEN_DEST_CORRECTO  = 'FLX-JFVXM-Z2B49XL-ZVVP-KDREJK';
+
+/* Array persistente de entradas creadas en la lista de Destinatarios */
+var destNuevoEntradas = [];
+
+function destEditStateKey(reiniciar, wol, directiva){
+  return 'destedit:|reiniciar:' + (reiniciar?'si':'no') + '|wol:' + (wol?'si':'no') + '|dir:' + (directiva||'');
+}
+function destProgStateKey(dias, horaInicio, horaFin){
+  var ds = (dias||[]).slice().sort().join(',');
+  return 'destprog:|dias:' + ds + '|inicio:' + (horaInicio||'') + '|fin:' + (horaFin||'');
+}
+var CORRECT_PROG_DEST_KEY    = destProgStateKey(['Sunday','Friday','Saturday'], '0', '4');
+var TOKEN_PROG_DEST_CORRECTO = 'FLX-BZTWS-P3947TD-QX22-YEKDXR';
+
+/* Clave combinada: el destinatario debe tener a la vez el grupo de reporte correcto
+   (nombre+grupo+directiva) Y la programación correcta (días+horas) para que la
+   lista de Destinatarios muestre el código correcto */
+function destCombinedKey(nombreGrupoKey, progKey){
+  return 'destcombo:' + nombreGrupoKey + '||' + progKey;
+}
+var CORRECT_COMBINED_DEST_KEY = destCombinedKey(CORRECT_DEST_KEY, CORRECT_PROG_DEST_KEY);
+
+function hasCorrectCombinedDest(){
+  var todos = [destPruebaData, destEquiposData].concat(destNuevoEntradas);
+  return todos.some(function(e){
+    if (!e || !e.programacion) return false;
+    var nombreGrupoKey = destNuevoStateKey(e.nombre, e.grupos, e.directiva);
+    if (nombreGrupoKey !== CORRECT_DEST_KEY) return false;
+    var progKey = destProgStateKey(e.programacion.dias, e.programacion.horaInicio, e.programacion.horaFin);
+    return progKey === CORRECT_PROG_DEST_KEY;
+  });
+}
+
+function computeDestNuevoToken(){
+  var key = destNuevoStateKey(destNuevoState.nombre, destNuevoState.gruposSeleccionados, destNuevoState.directiva);
+  if (key === CORRECT_DEST_KEY) return TOKEN_DEST_CORRECTO;
+  return computeToken(key);
+}
+
+var destEditState = { reiniciar: true, wol: false, directiva: 'Directiva de parches', grupos: ['rp2'] };
+
+/* Datos de la entrada de ejemplo, normalizados igual que las entradas creadas
+   por el alumno, para poder reutilizar el mismo panel de edición y detalle.
+   Cada destinatario tiene su propia programación (días, horas, semanas). */
+var destPruebaData = {
+  nombre: 'Prueba para directiva de actualización',
+  grupos: ['rp2'],
+  directiva: 'Directiva de parches',
+  reiniciar: true,
+  wol: false,
+  fechaCreacion: '17/9/25',
+  creadoPor: 'Usuario eliminado',
+  programacionEstablecida: true,
+  programacion: {
+    dias: ['Sunday','Friday','Saturday'],
+    horaInicio: '0', horaFin: '4',
+    semanas: ['Semana 1','Semana 4'],
+    huso: '(UTC+01:00) Amsterdam, Berlin, Bern, Rome, Stockholm, Vienna'
+  }
+};
+
+/* Segunda entrada de ejemplo: "Equipos" */
+var destEquiposData = {
+  nombre: 'Equipos',
+  grupos: ['rt', 'oieq', 'pv'],
+  directiva: 'Directiva de parches',
+  reiniciar: true,
+  wol: false,
+  fechaCreacion: '10/2/25',
+  creadoPor: 'Joan Serra',
+  programacionEstablecida: true,
+  programacion: {
+    dias: ['Monday','Tuesday','Wednesday','Thursday','Friday'],
+    horaInicio: '20', horaFin: '22',
+    semanas: ['Semana 1','Semana 2','Semana 3','Semana 4'],
+    huso: '(UTC+01:00) Amsterdam, Berlin, Bern, Rome, Stockholm, Vienna'
+  }
+};
+
+/* Qué entrada se está viendo en el detalle: la de ejemplo, "Equipos" o una creada por el alumno */
+var destDetailState = { source: 'prueba', index: null };
+/* Qué pestaña está activa en el detalle (para saber si la corrección de programación debe persistir) */
+var destDetailActiveTab = 'detalles';
+
+function getCurrentDestData(){
+  if (destDetailState.source === 'prueba') return destPruebaData;
+  if (destDetailState.source === 'equipos') return destEquiposData;
+  return destNuevoEntradas[destDetailState.index];
+}
+
+/* ---- Selector de grupos de reporte reutilizable (dropdown + tags) ---- */
+function createGruposPicker(ids, getSelected, setSelected, onChange){
+  var input = document.getElementById(ids.input);
+  var dropdown = document.getElementById(ids.dropdown);
+  function renderTags(){
+    var tagsEl = document.getElementById(ids.tags);
+    if (!tagsEl) return;
+    var selected = getSelected();
+    tagsEl.innerHTML = selected.map(function(gid){
+      var g = GRUPOS_REPORTE_OPTS.filter(function(x){ return x.id === gid; })[0];
+      if (!g) return '';
+      return '<span data-tag-gid="' + gid + '" style="background:' + g.color + ';color:#fff;border-radius:4px;padding:3px 8px;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:5px;cursor:default;">' +
+        g.initials + ' ' + g.label +
+        '<i class="ti ti-x" style="font-size:11px;cursor:pointer;" data-remove-gid="' + gid + '"></i></span>';
+    }).join('');
+    tagsEl.querySelectorAll('[data-remove-gid]').forEach(function(el){
+      el.addEventListener('click', function(){
+        setSelected(getSelected().filter(function(x){ return x !== el.dataset.removeGid; }));
+        renderTags();
+        if (onChange) onChange();
+      });
+    });
+  }
+  function buildDropdown(filter){
+    filter = (filter || '').toLowerCase();
+    var selected = getSelected();
+    var opts = GRUPOS_REPORTE_OPTS.filter(function(g){
+      return selected.indexOf(g.id) === -1 && g.label.toLowerCase().indexOf(filter) !== -1;
+    });
+    if (opts.length === 0){ dropdown.style.display = 'none'; return; }
+    dropdown.innerHTML = opts.map(function(g){
+      return '<div data-gid="' + g.id + '" style="padding:8px 12px;display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;background:#fff;" ' +
+        'onmouseover="this.style.background=\'#f5f4f0\'" onmouseout="this.style.background=\'#fff\'">' +
+        '<span style="width:24px;height:24px;border-radius:50%;background:' + g.color + ';color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">' + g.initials + '</span>' +
+        g.label + '</div>';
+    }).join('');
+    dropdown.style.display = 'block';
+    dropdown.querySelectorAll('[data-gid]').forEach(function(el){
+      el.addEventListener('mousedown', function(e){
+        e.preventDefault();
+        setSelected(getSelected().concat([el.dataset.gid]));
+        input.value = '';
+        dropdown.style.display = 'none';
+        renderTags();
+        if (onChange) onChange();
+        input.focus();
+      });
+    });
+  }
+  input.addEventListener('focus', function(){ buildDropdown(''); });
+  input.addEventListener('input', function(){ buildDropdown(this.value); });
+  input.addEventListener('blur', function(){ setTimeout(function(){ dropdown.style.display = 'none'; }, 150); });
+  renderTags();
+  return { renderTags: renderTags };
+}
+
+function setToggleVisual(cbId, trackId, value){
+  var cb = document.getElementById(cbId);
+  var track = document.getElementById(trackId);
+  if (cb) cb.checked = value;
+  if (track){
+    track.style.background = value ? '#f5813e' : '#ccc';
+    var dot = track.querySelector('span');
+    if (dot) dot.style.left = value ? '21px' : '3px';
+  }
+}
+
+function computeDestEditToken(){
+  return computeToken(destEditStateKey(destEditState.reiniciar, destEditState.wol, destEditState.directiva));
+}
+function computeDestProgToken(){
+  var key = destProgStateKey(destProgState.dias, destProgState.horaInicio, destProgState.horaFin);
+  if (key === CORRECT_PROG_DEST_KEY) return TOKEN_PROG_DEST_CORRECTO;
+  return computeToken(key);
+}
+
+function avatarGroupHtml(colors, initials){
+  return colors.map(function(c,i){
+    return '<span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:' + c + ';color:#fff;font-size:9px;font-weight:700;">' + (initials[i]||'?') + '</span>';
+  }).join('');
+}
+
+function destToggleHtml(cbId, trackId, label, checked){
+  var left = checked ? '21px' : '3px';
+  var bg   = checked ? '#f5813e' : '#ccc';
+  return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;">' +
+    '<span style="font-size:13px;font-weight:500;color:#333;">' + label + '</span>' +
+    '<label style="position:relative;display:inline-block;width:40px;height:22px;">' +
+      '<input type="checkbox" id="' + cbId + '"' + (checked?' checked':'') + ' style="opacity:0;width:0;height:0;">' +
+      '<span id="' + trackId + '" style="position:absolute;cursor:pointer;inset:0;background:' + bg + ';border-radius:22px;transition:.2s;">' +
+        '<span style="position:absolute;height:16px;width:16px;left:' + left + ';bottom:3px;background:#fff;border-radius:50%;transition:.2s;"></span>' +
+      '</span>' +
+    '</label>' +
+  '</div>';
+}
+
+/* ================= PÁGINA LISTA DESTINATARIOS ================= */
+function pageActDestinatarios(){
+  return '<div class="page"><div class="page-header">' + enunciadoHtml() + '<div style="font-size:18px;font-weight:600;color:#1a1a1a;margin-bottom:8px;">Destinatarios</div></div>' +
+  '<div class="toolbar">' +
+    '<div class="btn-tool" id="dest-nuevo-btn"><i class="ti ti-plus"></i> Nuevo</div>' +
+    '<div class="btn-tool"><i class="ti ti-file-export"></i> Exportar</div>' +
+    '<div class="btn-tool"><i class="ti ti-refresh"></i> Recargar</div>' +
+    '<div style="flex:1"></div>' +
+    '<div class="search-box" style="flex:none;"><i class="ti ti-search"></i><input placeholder="Buscar por término..."></div>' +
+    '<div class="filter-chip">Filtrar</div>' +
+  '</div>' +
+  '<div class="table-wrap"><table><thead><tr><th>Nombre</th><th>Grupos de reporte</th><th>Directiva de parches</th><th>Tiene programación establecida</th></tr></thead><tbody>' +
+  '<tr class="clickable" id="dest-prueba-row"><td class="desc-link">' + destPruebaData.nombre + '</td><td>' +
+    destPruebaData.grupos.map(function(gid){ var g = GRUPOS_REPORTE_OPTS.filter(function(x){ return x.id===gid; })[0]; return g ? g.label : gid; }).join(', ') +
+  '</td><td>' + (destPruebaData.directiva || '\u2014') + '</td><td>' + (destPruebaData.programacionEstablecida ? '\u2713' : '\u2014') + '</td></tr>' +
+  '<tr class="clickable" id="dest-equipos-row"><td class="desc-link">' + destEquiposData.nombre + '</td><td>' + avatarGroupHtml(
+    destEquiposData.grupos.map(function(gid){ return (GRUPOS_REPORTE_OPTS.filter(function(x){ return x.id===gid; })[0]||{}).color; }),
+    destEquiposData.grupos.map(function(gid){ return (GRUPOS_REPORTE_OPTS.filter(function(x){ return x.id===gid; })[0]||{}).initials; })
+  ) + '</td><td>' + (destEquiposData.directiva || '\u2014') + '</td><td>' + (destEquiposData.programacionEstablecida ? '\u2713' : '\u2014') + '</td></tr>' +
+  destNuevoEntradas.map(function(e, i){
+    var gruposLabel = e.grupos.map(function(gid){
+      var g = GRUPOS_REPORTE_OPTS.filter(function(x){ return x.id === gid; })[0];
+      return g ? g.label : gid;
+    }).join(', ');
+    return '<tr class="clickable" data-nuevo-index="' + i + '"><td class="desc-link">' + e.nombre + '</td><td>' + gruposLabel + '</td><td>' + (e.directiva || '\u2014') + '</td><td>' + (e.programacionEstablecida ? '\u2713' : '\u2014') + '</td></tr>';
+  }).join('') +
+  '</tbody></table></div>' +
+  '<div class="pager"><span></span><span>P\u00e1gina 1 de 1 \u00b7 1 a ' + (2 + destNuevoEntradas.length) + ' de ' + (2 + destNuevoEntradas.length) + ' resultados</span><span style="font-size:11px;color:#aaa;">Tama\u00f1o de p\u00e1gina: 50</span></div>' +
+  /* Panel crear nuevo */
+  '<div id="dest-nuevo-overlay" class="side-panel-overlay">' +
+    '<div class="side-panel">' +
+      '<div class="side-panel-header">' +
+        '<div class="side-panel-title">Crear nuevo destinatario de directiva de parches</div>' +
+        '<button class="side-panel-close" id="dest-nuevo-close"><i class="ti ti-x"></i></button>' +
+      '</div>' +
+      '<div class="sp-label">Nombre <span class="req">*</span></div>' +
+      '<input class="sp-input" id="dest-nuevo-nombre" placeholder="Introduce el nombre">' +
+      '<div class="sp-label">Grupos de reporte <span class="req">*</span></div>' +
+      '<div style="border:0.5px solid #ccc;border-radius:6px;min-height:38px;padding:6px 10px;font-size:13px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;cursor:text;position:relative;" id="dest-nuevo-grupos-box">' +
+        '<div id="dest-nuevo-tags" style="display:contents;"></div>' +
+        '<input id="dest-nuevo-grupos-input" placeholder="Seleccionar grupos de reporte" style="border:none;outline:none;font-size:12px;min-width:120px;flex:1;background:transparent;">' +
+        '<div id="dest-nuevo-dropdown" style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:0.5px solid #ccc;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.12);z-index:200;overflow:hidden;"></div>' +
+      '</div>' +
+      '<div class="sp-label">Directiva de parches de Microsoft</div>' +
+      '<div style="position:relative;">' +
+        '<select class="sp-select" id="dest-nuevo-directiva" style="appearance:none;padding-right:30px;">' +
+          '<option value="">Seleccionar directiva de parches de Microsoft</option>' +
+          directivaOptionsHtml('') +
+        '</select>' +
+        '<i class="ti ti-chevron-down" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:14px;color:#888;pointer-events:none;"></i>' +
+      '</div>' +
+      '<div id="dest-nuevo-token-preview" style="display:none;"></div>' +
+      '<div class="sp-footer" style="justify-content:flex-end;gap:8px;">' +
+        '<button class="sp-btn sp-btn-cancel" id="dest-nuevo-cancel"><i class="ti ti-x"></i> Cancelar</button>' +
+        '<button class="sp-btn sp-btn-submit" id="dest-nuevo-submit"><i class="ti ti-plus"></i> Nuevo</button>' +
+      '</div>' +
+    '</div>' +
+  '</div>' +
+  '</div>';
+}
+
+function wireActDestinatarios(){
+  var destRow = document.getElementById('dest-prueba-row');
+  if (destRow) destRow.addEventListener('click', function(){
+    destDetailState = { source: 'prueba', index: null };
+    goPage('actdestinatariodetail');
+  });
+
+  var equiposRow = document.getElementById('dest-equipos-row');
+  if (equiposRow) equiposRow.addEventListener('click', function(){
+    destDetailState = { source: 'equipos', index: null };
+    goPage('actdestinatariodetail');
+  });
+
+  /* Filas de entradas creadas por el alumno */
+  document.querySelectorAll('[data-nuevo-index]').forEach(function(tr){
+    tr.addEventListener('click', function(){
+      destDetailState = { source: 'nuevo', index: parseInt(tr.dataset.nuevoIndex, 10) };
+      goPage('actdestinatariodetail');
+    });
+  });
+
+  var nuevoGruposPicker = createGruposPicker(
+    { input: 'dest-nuevo-grupos-input', dropdown: 'dest-nuevo-dropdown', tags: 'dest-nuevo-tags' },
+    function(){ return destNuevoState.gruposSeleccionados; },
+    function(v){ destNuevoState.gruposSeleccionados = v; },
+    updateDestNuevoToken
+  );
+
+  document.getElementById('dest-nuevo-btn').addEventListener('click', function(){
+    destNuevoState = { nombre:'', gruposSeleccionados:[], directiva:'' };
+    document.getElementById('dest-nuevo-nombre').value = '';
+    document.getElementById('dest-nuevo-directiva').value = '';
+    nuevoGruposPicker.renderTags();
+    updateDestNuevoToken();
+    document.getElementById('dest-nuevo-overlay').classList.add('open');
+  });
+
+  function closeNuevo(){ document.getElementById('dest-nuevo-overlay').classList.remove('open'); refreshPageToken(); }
+  document.getElementById('dest-nuevo-close').addEventListener('click', closeNuevo);
+  document.getElementById('dest-nuevo-cancel').addEventListener('click', closeNuevo);
+  document.getElementById('dest-nuevo-overlay').addEventListener('click', function(e){ if (e.target === this) closeNuevo(); });
+
+  document.getElementById('dest-nuevo-nombre').addEventListener('input', function(){
+    destNuevoState.nombre = this.value;
+    updateDestNuevoToken();
+  });
+  document.getElementById('dest-nuevo-directiva').addEventListener('change', function(){
+    destNuevoState.directiva = this.value;
+    updateDestNuevoToken();
+  });
+
+  document.getElementById('dest-nuevo-submit').addEventListener('click', function(){
+    if (!destNuevoState.nombre.trim() || destNuevoState.gruposSeleccionados.length === 0){
+      alert('Nombre y Grupos de reporte son obligatorios.');
+      return;
+    }
+    /* Guardar en el array persistente: fuente única de verdad para la tabla, el detalle y el token.
+       Se asigna una programación por defecto (no la correcta del ejercicio) para que
+       "Tiene programación establecida" muestre ✓ desde el principio, como el resto de entradas. */
+    destNuevoEntradas.push({
+      nombre: destNuevoState.nombre.trim(),
+      grupos: destNuevoState.gruposSeleccionados.slice(),
+      directiva: destNuevoState.directiva,
+      reiniciar: true,
+      wol: false,
+      fechaCreacion: '8/9/26',
+      creadoPor: 'Alumno',
+      programacionEstablecida: true,
+      programacion: {
+        dias: ['Monday','Wednesday'],
+        horaInicio: '2', horaFin: '4',
+        semanas: ['Semana 2'],
+        huso: '(UTC+01:00) Amsterdam, Berlin, Bern, Rome, Stockholm, Vienna'
+      }
+    });
+    /* Recargar la página completa: pageActDestinatarios() ya renderiza desde destNuevoEntradas */
+    goPage('actdestinatarios');
+  });
+}
+
+function updateDestNuevoToken(){
+  var key = destNuevoStateKey(destNuevoState.nombre, destNuevoState.gruposSeleccionados, destNuevoState.directiva);
+  var isCorrect = (key === CORRECT_DEST_KEY);
+  var tok = isCorrect ? TOKEN_DEST_CORRECTO : computeToken(key);
+  /* Pasar la clave real para que updateGlobalToken → computeToken produzca el token correcto */
+  updateGlobalToken(isCorrect ? CORRECT_DEST_KEY : key);
+  var preview = document.getElementById('dest-nuevo-token-preview');
+  if (preview) preview.innerHTML = '<span style="color:#888;">C\u00f3digo actual: </span><span style="font-family:monospace;font-weight:700;color:#f5813e;letter-spacing:1px;">' + tok + '</span>';
+}
+
+/* ================= PÁGINA DETALLE DESTINATARIO ================= */
 function pageActDestinatarioDetail(){
+  var __d = getCurrentDestData();
   return '<div class="page"><div class="page-header">' + enunciadoHtml() +
-    '<div class="breadcrumb"><a id="dest-det-back" style="color:#2563eb;cursor:pointer;">Destinatarios</a><i class="ti ti-chevron-right" style="font-size:11px;"></i><span style="color:#555;">Prueba para directiva de actualización</span></div>' +
-    '<div style="font-size:22px;font-weight:700;color:#1a1a1a;margin:6px 0 0;">Prueba para directiva de actualización</div>' +
+    '<div class="breadcrumb"><a id="dest-det-back" style="color:#2563eb;cursor:pointer;">Destinatarios</a><i class="ti ti-chevron-right" style="font-size:11px;"></i><span style="color:#555;">' + __d.nombre + '</span></div>' +
+    '<div style="font-size:22px;font-weight:700;color:#1a1a1a;margin:6px 0 0;">' + __d.nombre + '</div>' +
   '</div>' +
   '<div style="padding:0 20px;padding-bottom:60px;">' +
     '<div class="gws-tabs" id="dest-det-tabs">' +
       '<div class="gws-tab active" data-dest-tab="detalles">Detalles</div>' +
-      '<div class="gws-tab" data-dest-tab="programacion">Programación</div>' +
+      '<div class="gws-tab" data-dest-tab="programacion">Programaci\u00f3n</div>' +
     '</div>' +
     '<div id="dest-det-content" class="gws-panel"></div>' +
   '</div>' +
-  /* Panel lateral de edición */
   '<div id="dest-edit-overlay" class="side-panel-overlay">' +
     '<div class="side-panel">' +
       '<div class="side-panel-header">' +
@@ -2245,48 +3694,26 @@ function pageActDestinatarioDetail(){
         '<button class="side-panel-close" id="dest-edit-close"><i class="ti ti-x"></i></button>' +
       '</div>' +
       '<div class="sp-label">Nombre <span class="req">*</span></div>' +
-      '<input class="sp-input" id="dest-edit-nombre" value="Prueba para directiva de actualización">' +
+      '<input class="sp-input" id="dest-edit-nombre" value="' + __d.nombre + '">' +
       '<div class="sp-label">Grupos de reporte <span class="req">*</span></div>' +
-      '<div style="border:0.5px solid #ccc;border-radius:6px;padding:8px 10px;font-size:13px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
-        '<span style="background:#8b2500;color:#fff;border-radius:4px;padding:3px 8px;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:5px;">' +
-          'R2 RP Training 2 <i class="ti ti-x" style="font-size:11px;cursor:pointer;"></i>' +
-        '</span>' +
+      '<div style="border:0.5px solid #ccc;border-radius:6px;min-height:38px;padding:6px 10px;font-size:13px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;cursor:text;position:relative;" id="dest-edit-grupos-box">' +
+        '<div id="dest-edit-tags" style="display:contents;"></div>' +
+        '<input id="dest-edit-grupos-input" placeholder="Seleccionar grupos de reporte" style="border:none;outline:none;font-size:12px;min-width:120px;flex:1;background:transparent;">' +
+        '<div id="dest-edit-dropdown" style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:0.5px solid #ccc;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.12);z-index:200;overflow:hidden;"></div>' +
       '</div>' +
       '<div class="sp-label">Directiva de parches de Microsoft</div>' +
-      '<select class="sp-select">' +
-        '<option selected>Directiva de parches</option>' +
+      '<select class="sp-select" id="dest-edit-directiva">' +
+        directivaOptionsHtml(__d.directiva) +
       '</select>' +
       '<div style="margin-top:20px;">' +
-        '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;">' +
-          '<div>' +
-            '<span style="font-size:13px;font-weight:500;color:#333;">Reiniciar tras aplicar actualizaciones</span>' +
-            ' <i class="ti ti-info-circle" style="font-size:13px;color:#aaa;"></i>' +
-          '</div>' +
-          '<label style="position:relative;display:inline-block;width:40px;height:22px;">' +
-            '<input type="checkbox" id="dest-toggle-reiniciar" checked style="opacity:0;width:0;height:0;">' +
-            '<span id="dest-toggle-reiniciar-track" style="position:absolute;cursor:pointer;inset:0;background:#f5813e;border-radius:22px;transition:.2s;">' +
-              '<span style="position:absolute;height:16px;width:16px;left:21px;bottom:3px;background:#fff;border-radius:50%;transition:.2s;"></span>' +
-            '</span>' +
-          '</label>' +
-        '</div>' +
-        '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;">' +
-          '<div>' +
-            '<span style="font-size:13px;font-weight:500;color:#333;">Wake on LAN</span>' +
-            ' <i class="ti ti-info-circle" style="font-size:13px;color:#aaa;"></i>' +
-          '</div>' +
-          '<label style="position:relative;display:inline-block;width:40px;height:22px;">' +
-            '<input type="checkbox" id="dest-toggle-wol" style="opacity:0;width:0;height:0;">' +
-            '<span id="dest-toggle-wol-track" style="position:absolute;cursor:pointer;inset:0;background:#ccc;border-radius:22px;transition:.2s;">' +
-              '<span style="position:absolute;height:16px;width:16px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.2s;"></span>' +
-            '</span>' +
-          '</label>' +
-        '</div>' +
+        destToggleHtml('dest-edit-reiniciar','dest-edit-reiniciar-track','Reiniciar tras aplicar actualizaciones', true) +
+        destToggleHtml('dest-edit-wol','dest-edit-wol-track','Wake on LAN', false) +
       '</div>' +
       '<div class="sp-footer" style="justify-content:space-between;">' +
-        '<button class="sp-btn" style="color:#c0392b;border-color:#c0392b;background:#fff;display:flex;align-items:center;gap:5px;" id="dest-edit-delete"><i class="ti ti-trash"></i> Delete</button>' +
+        '<button class="sp-btn" style="color:#c0392b;background:#fff;border:1px solid #c0392b;" id="dest-edit-delete">Delete</button>' +
         '<div style="display:flex;gap:8px;">' +
-          '<button class="sp-btn sp-btn-cancel" id="dest-edit-cancel"><i class="ti ti-x"></i> Cancelar</button>' +
-          '<button class="sp-btn sp-btn-submit" id="dest-edit-guardar"><i class="ti ti-device-floppy"></i> Guardar</button>' +
+          '<button class="sp-btn sp-btn-cancel" id="dest-edit-cancel">Cancelar</button>' +
+          '<button class="sp-btn sp-btn-submit" id="dest-edit-guardar">Guardar</button>' +
         '</div>' +
       '</div>' +
     '</div>' +
@@ -2295,146 +3722,219 @@ function pageActDestinatarioDetail(){
 }
 
 function wireActDestinatarioDetail(){
-  var back = document.getElementById('dest-det-back');
-  if (back) back.addEventListener('click', function(){ goPage('actdestinatarios'); });
+  document.getElementById('dest-det-back').addEventListener('click', function(){ goPage('actdestinatarios'); });
 
+  destDetailActiveTab = 'detalles';
   renderDestTab('detalles');
 
   document.querySelectorAll('[data-dest-tab]').forEach(function(el){
     el.addEventListener('click', function(){
       document.querySelectorAll('[data-dest-tab]').forEach(function(x){ x.classList.remove('active'); });
       el.classList.add('active');
-      renderDestTab(el.dataset.destTab);
+      var tab = el.dataset.destTab;
+      destDetailActiveTab = tab;
+      renderDestTab(tab);
     });
   });
 
   /* Panel edición */
-  function openDestEdit(){ document.getElementById('dest-edit-overlay').classList.add('open'); }
-  function closeDestEdit(){ document.getElementById('dest-edit-overlay').classList.remove('open'); }
+  var editGruposPicker = createGruposPicker(
+    { input: 'dest-edit-grupos-input', dropdown: 'dest-edit-dropdown', tags: 'dest-edit-tags' },
+    function(){ return destEditState.grupos; },
+    function(v){ destEditState.grupos = v; },
+    function(){ updateGlobalToken(computeDestEditToken()); }
+  );
+
+  function openDestEdit(){
+    var d = getCurrentDestData();
+    document.getElementById('dest-edit-nombre').value = d.nombre;
+    destEditState.grupos = d.grupos.slice();
+    destEditState.directiva = d.directiva;
+    destEditState.reiniciar = d.reiniciar;
+    destEditState.wol = d.wol;
+    editGruposPicker.renderTags();
+    document.getElementById('dest-edit-directiva').value = d.directiva;
+    setToggleVisual('dest-edit-reiniciar', 'dest-edit-reiniciar-track', d.reiniciar);
+    setToggleVisual('dest-edit-wol', 'dest-edit-wol-track', d.wol);
+    document.getElementById('dest-edit-overlay').classList.add('open');
+    updateGlobalToken(computeDestEditToken());
+  }
+  function closeDestEdit(){
+    document.getElementById('dest-edit-overlay').classList.remove('open');
+    refreshPageToken();
+  }
   document.getElementById('dest-edit-close').addEventListener('click', closeDestEdit);
   document.getElementById('dest-edit-cancel').addEventListener('click', closeDestEdit);
   document.getElementById('dest-edit-delete').addEventListener('click', closeDestEdit);
-  document.getElementById('dest-edit-guardar').addEventListener('click', closeDestEdit);
-  document.getElementById('dest-edit-overlay').addEventListener('click', function(e){
-    if (e.target === this) closeDestEdit();
+  document.getElementById('dest-edit-guardar').addEventListener('click', function(){
+    /* Persistir los cambios en la entrada actual (ejemplo o creada por el alumno) */
+    var d = getCurrentDestData();
+    var nuevoNombre = document.getElementById('dest-edit-nombre').value.trim();
+    if (nuevoNombre) d.nombre = nuevoNombre;
+    d.grupos = destEditState.grupos.slice();
+    d.directiva = destEditState.directiva;
+    d.reiniciar = destEditState.reiniciar;
+    d.wol = destEditState.wol;
+    document.getElementById('dest-edit-overlay').classList.remove('open');
+    /* Redibujar el detalle completo con los datos actualizados (título, breadcrumb, tabla) */
+    goPage('actdestinatariodetail');
   });
+  document.getElementById('dest-edit-overlay').addEventListener('click', function(e){ if (e.target===this) closeDestEdit(); });
 
-  /* Toggles interactivos */
-  function wireToggle(cbId, trackId){
+  function wireToggle(cbId, trackId, stateKey){
     var cb = document.getElementById(cbId);
     var track = document.getElementById(trackId);
-    if (!cb || !track) return;
-    function update(){
-      var on = cb.checked;
-      track.style.background = on ? '#f5813e' : '#ccc';
-      track.querySelector('span').style.left = on ? '21px' : '3px';
-    }
-    cb.addEventListener('change', update);
-    update();
+    if (!cb||!track) return;
+    cb.addEventListener('change', function(){
+      destEditState[stateKey] = cb.checked;
+      track.style.background = cb.checked ? '#f5813e' : '#ccc';
+      track.querySelector('span').style.left = cb.checked ? '21px' : '3px';
+      updateGlobalToken(computeDestEditToken());
+    });
   }
-  wireToggle('dest-toggle-reiniciar','dest-toggle-reiniciar-track');
-  wireToggle('dest-toggle-wol','dest-toggle-wol-track');
+  wireToggle('dest-edit-reiniciar','dest-edit-reiniciar-track','reiniciar');
+  wireToggle('dest-edit-wol','dest-edit-wol-track','wol');
+  var editDir = document.getElementById('dest-edit-directiva');
+  if (editDir) editDir.addEventListener('change', function(){
+    destEditState.directiva = this.value;
+    updateGlobalToken(computeDestEditToken());
+  });
 
-  /* El botón Edit lo inyectamos desde renderDestTab, necesitamos un delegado en el contenedor */
   document.getElementById('dest-det-content').addEventListener('click', function(e){
-    if (e.target.closest && e.target.closest('#dest-open-edit')){
-      openDestEdit();
-    }
+    if (e.target.closest && e.target.closest('#dest-open-edit')) openDestEdit();
   });
 }
 
 function renderDestTab(tab){
   var el = document.getElementById('dest-det-content');
   if (!el) return;
-
   if (tab === 'detalles'){
+    var d = getCurrentDestData();
+    var gruposLabels = d.grupos.map(function(gid){
+      var g = GRUPOS_REPORTE_OPTS.filter(function(x){ return x.id === gid; })[0];
+      return g ? g.label : gid;
+    });
+    var gruposRows = gruposLabels.map(function(label){
+      return '<tr><td style="padding:8px 0;color:#2563eb;border-bottom:0.5px solid #eee;">' + label + '</td></tr>';
+    }).join('');
     el.innerHTML =
       '<div style="display:grid;grid-template-columns:1fr 220px;gap:20px;">' +
         '<div class="gws-card">' +
           '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0;margin-bottom:18px;">' +
-            '<div>' +
-              '<div class="gws-field-label">Nombre</div>' +
-              '<div style="font-size:13px;color:#222;margin-bottom:16px;">Prueba para directiva de actualización</div>' +
-            '</div>' +
-            '<div>' +
-              '<div class="gws-field-label">Grupos de reporte</div>' +
-              '<div style="font-size:13px;color:#222;margin-bottom:16px;">1</div>' +
-            '</div>' +
+            '<div><div class="gws-field-label">Nombre</div><div style="font-size:13px;color:#222;margin-bottom:16px;">' + d.nombre + '</div></div>' +
+            '<div><div class="gws-field-label">Grupos de reporte</div><div style="font-size:13px;color:#222;margin-bottom:16px;">' + d.grupos.length + '</div></div>' +
           '</div>' +
-          '<div style="margin-bottom:14px;">' +
-            '<div class="gws-field-label">Reiniciar tras aplicar actualizaciones</div>' +
-            '<div style="font-size:13px;color:#2563eb;">Sí</div>' +
-          '</div>' +
-          '<div style="margin-bottom:14px;">' +
-            '<div class="gws-field-label">Wake on LAN</div>' +
-            '<div style="font-size:13px;color:#222;">No</div>' +
-          '</div>' +
-          '<div style="margin-bottom:18px;">' +
-            '<div class="gws-field-label">Directiva de ajuste de Microsoft</div>' +
-            '<div style="font-size:13px;"><a style="color:#2563eb;text-decoration:underline;cursor:pointer;">Directiva de parches</a></div>' +
-          '</div>' +
+          '<div style="margin-bottom:14px;"><div class="gws-field-label">Reiniciar tras aplicar actualizaciones</div><div style="font-size:13px;color:#2563eb;">' + (d.reiniciar ? 'S\u00ed' : 'No') + '</div></div>' +
+          '<div style="margin-bottom:14px;"><div class="gws-field-label">Wake on LAN</div><div style="font-size:13px;color:#222;">' + (d.wol ? 'S\u00ed' : 'No') + '</div></div>' +
+          '<div style="margin-bottom:18px;"><div class="gws-field-label">Directiva de ajuste de Microsoft</div><div style="font-size:13px;"><a style="color:#2563eb;text-decoration:underline;cursor:pointer;">' + (d.directiva || '\u2014') + '</a></div></div>' +
           '<div style="text-align:right;"><button class="sp-btn sp-btn-cancel" id="dest-open-edit">Edit</button></div>' +
           '<div style="border-top:0.5px solid #e0dfd8;margin-top:20px;padding-top:16px;">' +
             '<div class="gws-field-label" style="font-size:13px;font-weight:600;color:#222;margin-bottom:8px;">Grupos de reporte</div>' +
-            '<table style="width:100%;border-collapse:collapse;font-size:12px;">' +
-              '<thead><tr style="border-bottom:0.5px solid #ddd;"><th style="padding:6px 0;color:#555;text-align:left;font-weight:500;">Nombre</th></tr></thead>' +
-              '<tbody><tr><td style="padding:8px 0;color:#2563eb;border-bottom:0.5px solid #eee;">RP Training 2</td></tr></tbody>' +
-            '</table>' +
+            '<table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="border-bottom:0.5px solid #ddd;"><th style="padding:6px 0;color:#555;text-align:left;font-weight:500;">Nombre</th></tr></thead>' +
+            '<tbody>' + (gruposRows || '<tr><td style="padding:8px 0;color:#999;">Sin grupos asignados</td></tr>') + '</tbody></table>' +
           '</div>' +
         '</div>' +
         '<div>' +
-          '<div class="gws-side-box"><i class="ti ti-calendar" style="color:#f5813e;"></i><div><div class="gws-side-label">Fecha de creación</div><div class="gws-side-value">17/9/25</div></div></div>' +
-          '<div class="gws-side-box"><i class="ti ti-user" style="color:#f5813e;"></i><div><div class="gws-side-label">Creado por</div><div style="font-size:14px;font-weight:600;color:#c0392b;">Usuario eliminado</div></div></div>' +
+          '<div class="gws-side-box"><i class="ti ti-calendar" style="color:#f5813e;"></i><div><div class="gws-side-label">Fecha de creaci\u00f3n</div><div class="gws-side-value">' + d.fechaCreacion + '</div></div></div>' +
+          '<div class="gws-side-box"><i class="ti ti-user" style="color:#f5813e;"></i><div><div class="gws-side-label">Creado por</div><div style="font-size:14px;font-weight:600;color:#c0392b;">' + d.creadoPor + '</div></div></div>' +
         '</div>' +
       '</div>';
-  }
-  else if (tab === 'programacion'){
-    el.innerHTML = buildScheduleGrid();
+    updateGlobalToken(computeDestEditToken());
+  } else if (tab === 'programacion'){
+    el.innerHTML = buildProgramacionInline(getCurrentDestData());
+    wireProgramacionInline();
+    updateProgramacionInlineToken();
   }
 }
 
-/* ---- Grid horario de programación ---- */
-function buildScheduleGrid(){
-  var days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-  /* slots activos: [día, horaInicio*2, horaFin*2) en slots de 30min (0=0h, 7=3h30) */
-  /* Sunday: 0h–3h30 → slots 0..6 (7 slots), Friday: igual, Saturday: igual */
-  var activeSlots = {Sunday:{},Friday:{},Saturday:{}};
-  for (var s = 0; s < 7; s++){
-    activeSlots.Sunday[s] = true;
-    activeSlots.Friday[s] = true;
-    activeSlots.Saturday[s] = true;
-  }
+var TODOS_LOS_DIAS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+var TODAS_LAS_SEMANAS = ['Semana 1','Semana 2','Semana 3','Semana 4','Semana 5'];
+var HORAS_INICIO_OPTS = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23];
+var HORAS_FIN_OPTS = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24];
 
-  /* Cabecera de horas: 0h..23h */
-  var hourHeaders = '';
-  for (var h = 0; h < 24; h++){
-    hourHeaders += '<th style="min-width:40px;padding:4px 2px;text-align:center;font-size:10px;color:#666;font-weight:400;border:0.5px solid #e0dfd8;white-space:nowrap;" colspan="2">' + h + 'h</th>';
-  }
-
-  /* Filas de días */
-  var rowsHtml = days.map(function(day){
-    var cells = '';
-    for (var slot = 0; slot < 48; slot++){
-      var active = activeSlots[day] && activeSlots[day][slot];
-      cells += '<td style="width:20px;height:24px;border:0.5px solid #e0dfd8;background:' + (active ? '#f5813e' : '#fff') + ';padding:0;"></td>';
-    }
-    return '<tr><td style="padding:6px 10px;font-size:12px;color:#333;white-space:nowrap;font-weight:500;border:0.5px solid #e0dfd8;background:#fafaf8;min-width:80px;">' + day + '</td>' + cells + '</tr>';
+/* Contenido de la pestaña Programación: todo editable inline, sin panel ni cuadrícula */
+function buildProgramacionInline(d){
+  var p = d.programacion;
+  var diasHtml = TODOS_LOS_DIAS.map(function(day){
+    var checked = p.dias.indexOf(day) !== -1;
+    return '<label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;">' +
+      '<input type="checkbox" value="' + day + '" class="dest-prog-dia-cb"' + (checked ? ' checked' : '') + ' style="accent-color:#f5813e;width:15px;height:15px;"> ' + day + '</label>';
   }).join('');
 
-  return '<div style="text-align:right;margin-bottom:12px;">' +
-    '<button class="sp-btn sp-btn-submit">Editar</button>' +
-  '</div>' +
-  '<div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:16px;">' +
-    '<div><div class="gws-field-label">Periodicidad</div><div style="font-size:13px;color:#222;">Semana 1, Semana 4</div></div>' +
-    '<div><div class="gws-field-label">Huso horario</div><div style="font-size:13px;color:#2563eb;">(UTC+01:00) Amsterdam, Berlin, Bern, Rome, Stockholm, Vienna</div></div>' +
-  '</div>' +
-  '<div style="overflow-x:auto;">' +
-    '<table style="border-collapse:collapse;table-layout:fixed;">' +
-      '<thead><tr><th style="min-width:80px;border:0.5px solid #e0dfd8;background:#fafaf8;"></th>' + hourHeaders + '</tr></thead>' +
-      '<tbody>' + rowsHtml + '</tbody>' +
-    '</table>' +
+  var semanasHtml = TODAS_LAS_SEMANAS.map(function(sem){
+    var checked = p.semanas.indexOf(sem) !== -1;
+    return '<label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;">' +
+      '<input type="checkbox" value="' + sem + '" class="dest-prog-semana-cb"' + (checked ? ' checked' : '') + ' style="accent-color:#f5813e;width:15px;height:15px;"> ' + sem + '</label>';
+  }).join('');
+
+  var horaInicioHtml = HORAS_INICIO_OPTS.map(function(h){
+    return '<option value="' + h + '"' + (String(p.horaInicio) === String(h) ? ' selected' : '') + '>' + h + ':00</option>';
+  }).join('');
+  var horaFinHtml = HORAS_FIN_OPTS.map(function(h){
+    return '<option value="' + h + '"' + (String(p.horaFin) === String(h) ? ' selected' : '') + '>' + h + ':00</option>';
+  }).join('');
+
+  return '<div class="gws-card">' +
+    '<div style="margin-bottom:18px;">' +
+      '<div class="gws-field-label">Huso horario</div>' +
+      '<div style="font-size:13px;color:#2563eb;">' + p.huso + '</div>' +
+    '</div>' +
+    '<div class="sp-label">D\u00edas activos</div>' +
+    '<div id="dest-prog-dias-inline" style="display:flex;flex-wrap:wrap;gap:8px 20px;margin-bottom:18px;">' + diasHtml + '</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px;max-width:400px;">' +
+      '<div><div class="sp-label">Hora inicio</div><select class="sp-select" id="dest-prog-inicio-inline">' + horaInicioHtml + '</select></div>' +
+      '<div><div class="sp-label">Hora fin</div><select class="sp-select" id="dest-prog-fin-inline">' + horaFinHtml + '</select></div>' +
+    '</div>' +
+    '<div class="sp-label">Periodicidad (semanas del mes)</div>' +
+    '<div id="dest-prog-semanas-inline" style="display:flex;flex-wrap:wrap;gap:8px 20px;margin-bottom:20px;">' + semanasHtml + '</div>' +
+    '<div style="text-align:right;">' +
+      '<button class="sp-btn sp-btn-submit" id="dest-prog-guardar-inline"><i class="ti ti-device-floppy"></i> Guardar</button>' +
+    '</div>' +
   '</div>';
 }
+
+function readProgramacionInline(){
+  var dias = [];
+  document.querySelectorAll('.dest-prog-dia-cb:checked').forEach(function(cb){ dias.push(cb.value); });
+  var semanas = [];
+  document.querySelectorAll('.dest-prog-semana-cb:checked').forEach(function(cb){ semanas.push(cb.value); });
+  var horaInicio = document.getElementById('dest-prog-inicio-inline').value;
+  var horaFin = document.getElementById('dest-prog-fin-inline').value;
+  return { dias: dias, semanas: semanas, horaInicio: horaInicio, horaFin: horaFin };
+}
+
+function updateProgramacionInlineToken(){
+  var s = readProgramacionInline();
+  var key = destProgStateKey(s.dias, s.horaInicio, s.horaFin);
+  var isCorrect = (key === CORRECT_PROG_DEST_KEY);
+  updateGlobalToken(isCorrect ? CORRECT_PROG_DEST_KEY : key);
+}
+
+function wireProgramacionInline(){
+  var container = document.getElementById('dest-det-content');
+  if (!container) return;
+  container.querySelectorAll('.dest-prog-dia-cb, .dest-prog-semana-cb').forEach(function(cb){
+    cb.addEventListener('change', updateProgramacionInlineToken);
+  });
+  var inicioSel = document.getElementById('dest-prog-inicio-inline');
+  var finSel = document.getElementById('dest-prog-fin-inline');
+  if (inicioSel) inicioSel.addEventListener('change', updateProgramacionInlineToken);
+  if (finSel) finSel.addEventListener('change', updateProgramacionInlineToken);
+
+  var guardarBtn = document.getElementById('dest-prog-guardar-inline');
+  if (guardarBtn) guardarBtn.addEventListener('click', function(){
+    var s = readProgramacionInline();
+    var d = getCurrentDestData();
+    d.programacion.dias = s.dias;
+    d.programacion.semanas = s.semanas;
+    d.programacion.horaInicio = s.horaInicio;
+    d.programacion.horaFin = s.horaFin;
+    d.programacionEstablecida = s.dias.length > 0 && s.semanas.length > 0;
+    /* Volver a la lista de Destinatarios: la columna "Tiene programación establecida" refleja el cambio */
+    goPage('actdestinatarios');
+  });
+}
+
 
 /* ===================== DETALLE GRUPO DE WORKSPACES (ejercicio de programación) ===================== */
 
@@ -2452,7 +3952,8 @@ var groupMembership = {
   "Oficinas Madrid": ["DESKTOP-DEFE7N5","5CD54685XF","AEC-5HDHJR3","11LAP1JY0V74.indra.es"],
   "Menos de 80%": ["5CD54685XF","AEC-5HDHJR3","LAPTOP-B1TODCH9","Flexxible-Cice","DESKTOP-T5EH32O"],
   "Equipos sin actualizar más de 30 días": ["DESKTOP-DEFE7N5","11LAP1JY0V74.indra.es"],
-  "Dispositivos Encendidos": []
+  "Dispositivos Encendidos": [],
+  "Grupo Simón": []
 };
 
 var programacionesByGroup = {
@@ -3150,7 +4651,7 @@ function pageWAMetricas(){
     '<div style="font-size:20px;font-weight:700;color:#1a1a1a;display:flex;align-items:center;gap:8px;"><i class="ti ti-package" style="color:#f5813e;"></i> Flexxible Corp - Métricas de Web App</div>' +
     '<div style="font-size:13px;color:#888;margin-top:4px;">Datos basados en las últimas 24 horas</div></div>' +
     '<div class="toolbar"><div class="btn-tool"><i class="ti ti-file-export"></i> Exportar</div><div class="btn-tool"><i class="ti ti-refresh"></i> Recargar</div><div style="flex:1"></div><div class="search-box"><i class="ti ti-search"></i><input placeholder="Buscar por término..."></div><div class="filter-chip">Índice de experiencia: <b>75-89 Bueno</b></div></div>' +
-    '<div class="table-wrap"><table><thead><tr><th>Nombre</th><th>Índice de exp.</th><th>Total de peticiones</th><th>Workspaces</th><th>Latencia P95</th><th>Total de errores</th><th>Descripción</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+    '<div class="table-wrap"><table><thead><tr><th>Nombre</th><th>Índice de experiencia</th><th>Total de peticiones</th><th>Workspaces</th><th>Latencia P95</th><th>Total de errores</th><th>Descripción</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
     '<div style="padding:8px 18px;font-size:11px;color:#888;">Página 1 de 1 · Mostrando 1 a 8 de 8 resultados</div></div>';
 }
 
@@ -3353,8 +4854,17 @@ document.getElementById('sidebar-nav').addEventListener('click', function(e){
 });
 
 var contentObserver = new MutationObserver(function(){
-  var panelOpen = document.getElementById('sp-overlay').classList.contains('open');
-  if (panelOpen) return; // mientras el panel está abierto, el token lo controla el estado de sus campos
+  var anyPanelOpen = document.getElementById('sp-overlay').classList.contains('open') ||
+    (document.getElementById('dest-nuevo-overlay') && document.getElementById('dest-nuevo-overlay').classList.contains('open')) ||
+    (document.getElementById('dest-edit-overlay') && document.getElementById('dest-edit-overlay').classList.contains('open')) ||
+    (document.getElementById('dir-nuevo-overlay') && document.getElementById('dir-nuevo-overlay').classList.contains('open')) ||
+    (document.getElementById('dir-edit-overlay') && document.getElementById('dir-edit-overlay').classList.contains('open')) ||
+    (document.getElementById('flujo-nuevo-overlay') && document.getElementById('flujo-nuevo-overlay').classList.contains('open')) ||
+    (document.getElementById('flujo-edit-overlay') && document.getElementById('flujo-edit-overlay').classList.contains('open')) ||
+    (document.getElementById('flujo-cond-picker-overlay') && document.getElementById('flujo-cond-picker-overlay').classList.contains('open')) ||
+    (document.getElementById('flujo-cond-edit-overlay') && document.getElementById('flujo-cond-edit-overlay').classList.contains('open')) ||
+    (document.getElementById('flujo-accion-picker-overlay') && document.getElementById('flujo-accion-picker-overlay').classList.contains('open'));
+  if (anyPanelOpen) return; // mientras un panel está abierto, el token lo controla el estado de sus campos
   refreshPageToken();
 });
 contentObserver.observe(document.getElementById('content-area'), { childList: true, subtree: true, characterData: true });
